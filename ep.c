@@ -4,10 +4,17 @@
  * Nathan Forbes (2014)
  */
 
+#ifdef HAVE_CONFIG_H
+# include "config.h"
+#endif
+
 #include <ctype.h>
 #include <errno.h>
 #include <getopt.h>
 #include <stdarg.h>
+#ifdef HAVE_STDBOOL_H
+# include <stdbool.h>
+#endif
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -17,8 +24,17 @@
 
 #include <curl/curl.h>
 
-#define EP_PROGRAM_NAME "ep"
-#define EP_VERSION      "1.0.0"
+#ifdef PACKAGE_NAME
+# define EP_PROGRAM_NAME PACKAGE_NAME
+#else
+# define EP_PROGRAM_NAME "ep"
+#endif
+
+#ifdef PACKAGE_VERSION
+# define EP_VERSION PACKAGE_VERSION
+#else
+# define EP_VERSION "1.0.0"
+#endif
 
 #define EPISODES_URL "http://www.tv.com/shows/%s/episodes/"
 #define SEASON_URL   "http://www.tv.com/shows/%s/season-%u/"
@@ -61,9 +77,11 @@
     } \
   } while (0)
 
+#ifndef HAVE_STDBOOL_H
 typedef unsigned char bool;
-#define false ((bool) 0)
-#define true  ((bool) 1)
+# define false ((bool) 0)
+# define true  ((bool) 1)
+#endif
 
 #ifdef DEBUG
 # undef __FUNC
