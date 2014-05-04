@@ -489,10 +489,7 @@ progress_cb (void *data, double dt, double dc, double ut, double uc)
     if (m == -1)
       el_gettimeofday (&l);
     else
-    {
-      l.tv_sec = n.tv_sec;
-      l.tv_usec = n.tv_usec;
-    }
+      memcpy (&l, &n, sizeof (struct timeval));
   }
   return 0;
 }
@@ -721,7 +718,7 @@ retrieve_series_data (void)
   if (try_connect (e_url))
   {
     parse_episodes_page ();
-    for (s = 0; s < series->total_seasons; ++s)
+    for (s = 0; (s < series->total_seasons); ++s)
     {
       char s_url[URL_BUFMAX];
       snprintf (s_url, URL_BUFMAX, SEASON_URL, series->u_title, s + 1);
