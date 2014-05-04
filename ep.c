@@ -325,13 +325,14 @@ static void
 usage (bool had_error)
 {
   fprintf ((had_error) ? stderr : stdout,
-           "Usage: %s [-s<N>] [-e<N>] [-dr] <TITLE>\n",
+           "Usage: %s [-adr] [-s<N>] [-e<N>] <TITLE>\n",
            program_name);
 
   if (!had_error)
     fputs ("Options:\n"
            "  -e<N>, --episode=<N>  specify episode <N>\n"
            "  -s<N>, --season=<N>   specify season <N>\n"
+           "  -a, --air             print air date for each episode\n"
            "  -d, --description     print description for each episode\n"
            "  -r, --rating          print rating for each episode\n"
            "  -h, --help            print this text and exit\n"
