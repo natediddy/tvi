@@ -10,18 +10,18 @@ else
 	CFLAGS += -O2 -march=native -mtune=native
 endif
 
-TARGET = el
+TARGET = ep
 
-SOURCES = el.c
-OBJECTS = el.o
+SOURCES = ep.c
+OBJECTS = ep.o
 
 all: $(TARGET)
 
 $(TARGET): $(OBJECTS)
 	$(CC) $(CFLAGS) $(OBJECTS) -o $(TARGET) $(LIBS)
 
-el.o:
-	$(CC) $(CFLAGS) -c el.c
+ep.o:
+	$(CC) $(CFLAGS) -c ep.c
 
 clean:
 	@rm -f $(OBJECTS) $(TARGET)

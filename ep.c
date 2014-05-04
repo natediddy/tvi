@@ -1,5 +1,5 @@
 /*
- * el.c
+ * ep.c
  *
  * Nathan Forbes (2014)
  */
@@ -17,12 +17,12 @@
 
 #include <curl/curl.h>
 
-#define EL_PROGRAM_NAME "el"
-#define EL_VERSION      "1.0.0"
+#define EP_PROGRAM_NAME "ep"
+#define EP_VERSION      "1.0.0"
 
 #define EPISODES_URL "http://www.tv.com/shows/%s/episodes/"
 #define SEASON_URL   "http://www.tv.com/shows/%s/season-%u/"
-#define USERAGENT    "EL (Episode List)/" EL_VERSION
+#define USERAGENT    EP_PROGRAM_NAME " (EPisode list)/" EP_VERSION
 
 #define U_TITLE_IGNORE_CHARS ".'"
 
@@ -48,10 +48,10 @@
 
 #define propeller_wait_time(m) ((m) >= (MILLIS_PER_SEC / 25L))
 
-#define el_new(type)          ((type *) el_malloc (sizeof (type)))
-#define el_newa(type, n)      ((type *) el_malloc ((n) * sizeof (type)))
-#define el_renewa(type, p, n) ((type *) el_realloc (p, (n) * sizeof (type)))
-#define el_free(p) \
+#define ep_new(type)          ((type *) ep_malloc (sizeof (type)))
+#define ep_newa(type, n)      ((type *) ep_malloc ((n) * sizeof (type)))
+#define ep_renewa(type, p, n) ((type *) ep_realloc (p, (n) * sizeof (type)))
+#define ep_free(p) \
   do \
   { \
     if (p) \
@@ -172,7 +172,7 @@ set_program_name (const char *n)
     return;
   }
   debug ("argv[0] == NULL");
-  program_name = EL_PROGRAM_NAME;
+  program_name = EP_PROGRAM_NAME;
 }
 
 static void
@@ -202,10 +202,10 @@ die (const char *fmt, ...)
 
 /* Return the length of S while skipping characters in EXCEPT.
    For example:
-     size_t n = el_strlen ("'foo'.'bar'", ".'");
+     size_t n = ep_strlen ("'foo'.'bar'", ".'");
    In this example n would be 6, not 11 like strlen() would return. */
 static size_t
-el_strlen (const char *s, const char *except)
+ep_strlen (const char *s, const char *except)
 {
   bool ec;
   size_t n;
@@ -233,12 +233,12 @@ el_strlen (const char *s, const char *except)
 /* Copy SRC into DEST while skipping characters in EXCEPT.
    For example:
      char buffer[1024];
-     el_strcpy (buffer, "'foo'.'bar'", ".'");
+     ep_strcpy (buffer, "'foo'.'bar'", ".'");
      printf ("%s\n", buffer);
    This example would print the string "foobar".
    NOTE: this automatically adds a terminating '\0' to DEST */
 static void *
-el_strcpy (char *dest, const char *src, const char *except)
+ep_strcpy (char *dest, const char *src, const char *except)
 {
   bool ec;
   size_t n;
@@ -246,7 +246,7 @@ el_strcpy (char *dest, const char *src, const char *except)
   const char *e;
   const char *s;
 
-  n = el_strlen (src, except);
+  n = ep_strlen (src, except);
 
   char buf[n + 1];
   for (p = buf, s = src; *s; ++s)
@@ -269,7 +269,7 @@ el_strcpy (char *dest, const char *src, const char *except)
 }
 
 static void *
-el_malloc (size_t n)
+ep_malloc (size_t n)
 {
   void *p;
 
@@ -283,7 +283,7 @@ el_malloc (size_t n)
 }
 
 static void *
-el_realloc (void *o, size_t n)
+ep_realloc (void *o, size_t n)
 {
   void *p;
 
@@ -321,7 +321,7 @@ usage (bool had_error)
 static void
 version (void)
 {
-  fputs (EL_PROGRAM_NAME " " EL_VERSION "\n"
+  fputs (EP_PROGRAM_NAME " " EP_VERSION "\n"
          "Written by Nathan Forbes (2014)\n",
          stdout);
   exit (EXIT_SUCCESS);
@@ -362,7 +362,7 @@ set_series_title (char **item)
   for (p = 0; item[p]; ++p)
   {
     ng += strlen (item[p]);
-    nu = el_strlen (item[p], U_TITLE_IGNORE_CHARS);
+    nu = ep_strlen (item[p], U_TITLE_IGNORE_CHARS);
     if (item[p + 1])
     {
       ng++;
@@ -372,16 +372,16 @@ set_series_title (char **item)
 
   g_pos = 0;
   u_pos = 0;
-  series->g_title = el_newa (char, ng + 1);
-  series->u_title = el_newa (char, nu + 1);
+  series->g_title = ep_newa (char, ng + 1);
+  series->u_title = ep_newa (char, nu + 1);
 
   for (p = 0; item[p]; ++p)
   {
     ng = strlen (item[p]);
     memcpy (series->g_title + g_pos, item[p], ng);
-    el_strcpy (series->u_title + u_pos, item[p], U_TITLE_IGNORE_CHARS);
+    ep_strcpy (series->u_title + u_pos, item[p], U_TITLE_IGNORE_CHARS);
     g_pos += ng;
-    u_pos += el_strlen (item[p], U_TITLE_IGNORE_CHARS);
+    u_pos += ep_strlen (item[p], U_TITLE_IGNORE_CHARS);
     if (item[p + 1])
     {
       series->g_title[g_pos++] = ' ';
@@ -395,7 +395,7 @@ set_series_title (char **item)
 }
 
 static void
-el_gettimeofday (struct timeval *tv)
+ep_gettimeofday (struct timeval *tv)
 {
   memset (tv, 0, sizeof (struct timeval));
   if (gettimeofday (tv, NULL) == -1)
@@ -436,7 +436,7 @@ write_cb (void *buf, size_t size, size_t nmemb, void *data)
   p = (struct page_content *) data;
   n = (size * nmemb);
 
-  p->buf = el_renewa (char, p->buf, p->n + n + 1);
+  p->buf = ep_renewa (char, p->buf, p->n + n + 1);
   memcpy (p->buf + p->n, buf, n);
   p->n += n;
   p->buf[p->n] = '\0';
@@ -471,7 +471,7 @@ progress_cb (void *data, double dt, double dc, double ut, double uc)
     m = -1;
   else
   {
-    el_gettimeofday (&n);
+    ep_gettimeofday (&n);
     m = milliseconds (&l, &n);
   }
 
@@ -487,7 +487,7 @@ progress_cb (void *data, double dt, double dc, double ut, double uc)
     fputc ('\r', stdout);
     fflush (stdout);
     if (m == -1)
-      el_gettimeofday (&l);
+      ep_gettimeofday (&l);
     else
       memcpy (&l, &n, sizeof (struct timeval));
   }
@@ -519,7 +519,7 @@ static bool
 try_setup (CURL *cp, CURLcode status, const char *url)
 {
   pc.n = 0;
-  pc.buf = el_newa (char, 1);
+  pc.buf = ep_newa (char, 1);
 
   status = curl_easy_setopt (cp, CURLOPT_URL, url);
   if (!check_status (status))
@@ -761,13 +761,13 @@ display_series_data (void)
 static void
 cleanup (void)
 {
-  el_free (pc.buf);
+  ep_free (pc.buf);
   if (series)
   {
-    el_free (series->g_title);
-    el_free (series->u_title);
+    ep_free (series->g_title);
+    ep_free (series->u_title);
   }
-  el_free (series);
+  ep_free (series);
 }
 
 static void
@@ -839,7 +839,7 @@ main (int argc, char **argv)
     usage (true);
   }
 
-  series = el_new (struct series);
+  series = ep_new (struct series);
   set_series_title (argv + optind);
   retrieve_series_data ();
   verify_options_with_series_data ();
