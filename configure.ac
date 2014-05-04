@@ -1,6 +1,6 @@
 AC_INIT(
   [ep],
-  [1.0.0],
+  [1.2.0],
   [sforbes41@gmail.com],
   [ep],
   [https://github.com/natediddy/ep],

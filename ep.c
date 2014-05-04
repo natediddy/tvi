@@ -33,7 +33,7 @@
 #ifdef PACKAGE_VERSION
 # define EP_VERSION PACKAGE_VERSION
 #else
-# define EP_VERSION "1.0.0"
+# define EP_VERSION "1.2.0"
 #endif
 
 #define EPISODES_URL "http://www.tv.com/shows/%s/episodes/"
@@ -41,6 +41,9 @@
 #define USERAGENT    EP_PROGRAM_NAME " (EPisode list)/" EP_VERSION
 
 #define U_TITLE_IGNORE_CHARS ".'"
+
+/* for getopt_long */
+#define OPTSTR "ade:rs:hv"
 
 #define DEFAULT_TERM_WIDTH 40
 #define MILLIS_PER_SEC     1000L
@@ -54,13 +57,14 @@
 #define EPISODE_PATTERN        "Episode %u\r\n"
 #define EPISODE_PATTERN_BUFMAX 256
 
-#define DESCRIPTION_BUFMAX 2048
-#define RATING_BUFMAX      24
+#define AIR_DATE_BUFMAX         24
+#define DESCRIPTION_BUFMAX    2048
+#define RATING_BUFMAX           24
+#define SERIES_P_TITLE_BUFMAX 1024
+#define EPISODE_TITLE_BUFMAX  1024
 
-#define SERIES_P_TITLE_MAX 1024
-#define EPISODE_TITLE_MAX  1024
-#define EPISODES_MAX       1024
-#define SEASONS_MAX        1024
+#define EPISODES_MAX 1024
+#define SEASONS_MAX  1024
 
 #define propeller_wait_time(m) ((m) >= (MILLIS_PER_SEC / 25L))
 
@@ -120,7 +124,8 @@ struct page_content
 
 struct episode
 {
-  char title[EPISODE_TITLE_MAX];
+  char title[EPISODE_TITLE_BUFMAX];
+  char air_date[AIR_DATE_BUFMAX];
   char description[DESCRIPTION_BUFMAX];
   char rating[RATING_BUFMAX];
 };
@@ -134,13 +139,14 @@ struct season
 struct series
 {
   unsigned int total_seasons;
-  char p_title[SERIES_P_TITLE_MAX];
+  char p_title[SERIES_P_TITLE_BUFMAX];
   char *g_title;
   char *u_title;
   struct season season[SEASONS_MAX];
 };
 
 const char *               program_name;
+static bool                show_air_dates    = false;
 static bool                show_descriptions = false;
 static bool                show_ratings      = false;
 static unsigned int        n_episode         = 0U;
@@ -150,6 +156,7 @@ static struct series *     series            = NULL;
 
 static struct option const opts[] =
 {
+  {"air", no_argument, NULL, 'a'},
   {"description", no_argument, NULL, 'd'},
   {"episode", required_argument, NULL, 'e'},
   {"rating", no_argument, NULL, 'r'},
@@ -674,6 +681,20 @@ parse_season_page (struct season *season)
           break;
         }
       }
+      if (show_air_dates)
+      {
+        q = strstr (p, "class=\"date\">");
+        if (q && *q)
+        {
+          q += strlen ("class=\"date\">");
+          char *a = season->episode[x - 1].air_date;
+          for (; (*q != '<'); ++a, ++q)
+            *a = *q;
+          *a = '\0';
+        }
+        else
+          *season->episode[x - 1].air_date = '\0';
+      }
       if (show_ratings)
       {
         q = strstr (p, "_rating");
@@ -712,8 +733,35 @@ parse_season_page (struct season *season)
             break;
           }
           char *d = season->episode[x - 1].description;
-          for (; (*q != '<'); ++d, ++q)
+          bool end;
+          for (; *q; ++d, ++q)
+          {
+            end = false;
+            while (*q == '<')
+            {
+              /* "</" should mean description is over
+                 as in "</span>" or "</p>" */
+              if (*(q + 1) == '/')
+              {
+                end = true;
+                break;
+              }
+              /* if not a "</WHATEVER>" tag then skip over it entirely */
+              while (*q != '>')
+                q++;
+              if (*q == '>')
+                q++;
+            }
+            if (end)
+              break;
+            /* skip over "&nbsp;" tokens */
+            while (memcmp (q, "&nbsp;", 6) == 0)
+            {
+              q += 6;
+              *d++ = ' ';
+            }
             *d = *q;
+          }
           *d = '\0';
         }
         else
@@ -767,6 +815,8 @@ display_series_data (void)
                   series->season[s].episode[e].title);
           if (show_ratings)
             printf (" (%s)", series->season[s].episode[e].rating);
+          if (show_air_dates)
+            printf (" %s", series->season[s].episode[e].air_date);
           fputc ('\n', stdout);
           if (show_descriptions)
             printf ("  %s\n\n", series->season[s].episode[e].description);
@@ -820,8 +870,11 @@ main (int argc, char **argv)
   set_program_name (argv[0]);
   atexit (cleanup);
 
-  while ((c = getopt_long (argc, argv, "de:rs:hv", opts, NULL)) != -1)
+  for (;;)
   {
+    c = getopt_long (argc, argv, OPTSTR, opts, NULL);
+    if (c == -1)
+      break;
     switch (c)
     {
       case 'e':
@@ -829,6 +882,9 @@ main (int argc, char **argv)
         break;
       case 's':
         n_season = (unsigned int) strtoul (optarg, (char **) NULL, 10);
+        break;
+      case 'a':
+        show_air_dates = true;
         break;
       case 'd':
         show_descriptions = true;
