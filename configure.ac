@@ -1,6 +1,6 @@
 AC_INIT(
   [ep],
-  [1.2.0],
+  [2.0.0],
   [sforbes41@gmail.com],
   [ep],
   [https://github.com/natediddy/ep],
@@ -17,7 +17,6 @@ AM_MAINTAINER_MODE
 
 AC_PROG_CC
 
-AC_HEADER_STDBOOL
 AC_TYPE_SIZE_T
 AC_TYPE_SSIZE_T
 

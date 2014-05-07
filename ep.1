@@ -1,9 +1,9 @@
-.TH EP 1 "May 2014" "1.2.0" "User Commands"
+.TH EP 1 "May 2014" "2.0.0" "User Commands"
 .SH NAME
-ep \- show television series episode information
+ep \- display television series episode information
 .SH SYNOPSIS
 .B ep
-[\-\fBadr\fR] [\-\fBs\fR\fIN\fR] [\-\fBe\fR\fIN\fR] \fITITLE\fR
+[-i] [\-\fBadrt\fR] [\-\fBs\fR\fIN\fR] [\-\fBe\fR\fIN\fR] \fITITLE\fR
 .SH DESCRIPTION
 .PP
 Retrieve episode information about a TV series.
@@ -25,18 +25,19 @@ print description for each episode
 \fB\-r\fR, \fB\-\-rating\fR
 print rating for each episode
 .TP
+\fB\-t\fR, \fB\-\-no-title\fR
+do not print episode titles
+.TP
+\fB\-i\fR, \fB\-\-info\fR
+print general info about \fITITLE\fR
+.TP
 \fB\-h\fR, \fB\-\-help\fR
 print help message and exit
 .TP
 \fB\-v\fR, \fB\-\-version\fR
-print version information and exit
-.SD "Exit status:"
-.TP
-zero
-on success
-.TP
-non-zero
-if an error occurred
+print version info and exit
+.SH "EXIT STATUS"
+Returns zero on success, and non-zero if an error occurred.
 .SH EXAMPLES
 .nf
 Print the titles of all episodes in the HBO series \fIThe Wire\fR:
