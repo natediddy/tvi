@@ -6,7 +6,7 @@ All TV series data is obtained from [TV.com](http://www.tv.com/).
 
 Usage
 -----
-    Usage: tvi [-i] [-adrt] [-sN[,N,...]] [-eN[,N,...]] TITLE
+    Usage: tvi [-adir] [-sN[,N,...]] [-eN[,N,...]] TITLE
 
 Options
 -------
@@ -19,7 +19,6 @@ Options
     -a, --air             print air date for each episode
     -d, --description     print description for each episode
     -r, --rating          print rating for each episode
-    -t, --no-title        do not print episode titles
     -i, --info            print general info about TITLE
     -h, --help            print this text and exit
     -v, --version         print version information and exit
