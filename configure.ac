@@ -1,14 +1,14 @@
 AC_INIT(
-  [ep],
-  [2.0.0],
+  [tvi],
+  [2.5.0],
   [sforbes41@gmail.com],
-  [ep],
+  [tvi],
   [https://github.com/natediddy/ep],
 )
 
 AC_MSG_NOTICE([Configuring $PACKAGE_NAME $PACKAGE_VERSION])
 
-AC_CONFIG_SRCDIR([ep.c])
+AC_CONFIG_SRCDIR([tvi.c])
 AC_CONFIG_HEADERS([config.h])
 AM_INIT_AUTOMAKE([-Wall no-define foreign])
 AC_CONFIG_FILES([Makefile])
@@ -33,7 +33,7 @@ AS_IF(
 )
 
 AC_CHECK_LIB(curl, curl_easy_init, [LIBS="$LIBS -lcurl"],
-             [AC_ERROR([libcurl is required to build ep, if you do not
+             [AC_ERROR([libcurl is required to build tvi, if you do not
                         have it, you can get it from
                         http://curl.haxx.se/download.html/ or from your
                         system package manager (if you have one)])])

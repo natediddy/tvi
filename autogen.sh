@@ -3,8 +3,8 @@
 myname=`basename $0`
 CONFIGURE_OPTIONS=
 
-if test ! -f configure.ac || test ! -f ep.c; then
-  echo "$myname: error: cannot run from outside the ep source directory"
+if test ! -f configure.ac || test ! -f tvi.c; then
+  echo "$myname: error: cannot run from outside the tvi source directory"
   exit 1
 fi
 
@@ -155,12 +155,12 @@ ${AUTOMAKE:-automake} -a -c ||
 echo
 echo "=================================================================="
 echo
-echo "To build ep type:"
+echo "To build tvi type:"
 echo
 echo "    ./configure"
 echo "    make"
 echo
-echo "To install ep type:"
+echo "To install tvi type:"
 echo
 echo "    sudo make install"
 echo

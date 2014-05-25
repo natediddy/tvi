@@ -1,27 +1,35 @@
-ep
-==
-EP is a small tool written in C that can retrieve episode information about many TV shows from the command line.
+tvi
+===
+TVI is a small tool written in C that can retrieve episode information about many TV shows from the command line.
 
 All TV series data is obtained from [TV.com](http://www.tv.com/).
 
 Usage
 -----
-    Usage: ep [-adr] [-s<N>] [-e<N>] <TITLE>
+    Usage: tvi [-i] [-adrt] [-sN[,N,...]] [-eN[,N,...]] TITLE
 
 Options
 -------
-    -e<N>, --episode=<N>  specify episode <N>
-    -s<N>, --season=<N>   specify season <N>
+    -e N, --episode=N     specify episode(s) N
+                          more than 1 episode can be specified in a
+                          comma-separated list: N1,N2,N3,...
+    -s N, --season=N      specify season(s) N
+                          more than 1 season can be specified in a
+                          comma-separated list: N1,N2,N3,...
     -a, --air             print air date for each episode
     -d, --description     print description for each episode
     -r, --rating          print rating for each episode
+    -t, --no-title        do not print episode titles
+    -i, --info            print general info about TITLE
     -h, --help            print this text and exit
     -v, --version         print version information and exit
+
+No more than 1 TITLE argument may be provided.
 
 Building
 --------
 The external library [LibcURL](http://curl.haxx.se/download.html/) is required
-in order to build ep. Also make sure the GNU Autotools are installed.
+in order to build tvi. Also make sure the GNU Autotools are installed.
 
 On a Linux system, simply run:
 

@@ -1,9 +1,9 @@
-.TH EP 1 "May 2014" "2.0.0" "User Commands"
+.TH TVI 1 "May 2014" "2.5.0" "User Commands"
 .SH NAME
-ep \- display television series episode information
+tvi \- display information about a television series
 .SH SYNOPSIS
-.B ep
-[-i] [\-\fBadrt\fR] [\-\fBs\fR\fIN\fR] [\-\fBe\fR\fIN\fR] \fITITLE\fR
+.B tvi
+[\-\fBadir\fR] [\-\fBs\fR\fIN\fR[,\fIN\fR,...]] [\-\fBe\fR\fIN\fR[,\fIN\fR,...]] \fITITLE\fR
 .SH DESCRIPTION
 .PP
 Retrieve episode information about a TV series.
@@ -11,10 +11,12 @@ Retrieve episode information about a TV series.
 Mandatory arguments to long options are mandatory for short options too.
 .TP
 \fB\-s\fR, \fB\-\-season\fR=\fIN\fR
-specify season \fIN\fR of \fITITLE\fR
+specify season(s) \fIN\fR of \fITITLE\fR
+more than 1 season can be specified in a comma-separated list: \fIN1\fR,\fIN2\fR,\fIN3\fR,...
 .TP
 \fB\-e\fR, \fB\-\-episode\fR=\fIN\fR
-specify episode \fIN\fR of \fITITLE\fR
+specify episode(s) \fIN\fR of \fITITLE\fR
+more than 1 episode can be specified in a comma-separated list: \fIN1\fR,\fIN2\fR,\fIN3\fR,...
 .TP
 \fB\-a\fR, \fB\-\-air\fR
 print air date for each episode
@@ -24,9 +26,6 @@ print description for each episode
 .TP
 \fB\-r\fR, \fB\-\-rating\fR
 print rating for each episode
-.TP
-\fB\-t\fR, \fB\-\-no-title\fR
-do not print episode titles
 .TP
 \fB\-i\fR, \fB\-\-info\fR
 print general info about \fITITLE\fR
@@ -40,19 +39,33 @@ print version info and exit
 Returns zero on success, and non-zero if an error occurred.
 .SH EXAMPLES
 .nf
-Print the titles of all episodes in the HBO series \fIThe Wire\fR:
+Print the titles of all episodes in HBO's \fIThe Wire\fR:
 
-    ep the wire
+    tvi the wire
 
-Print title, original air date, rating, and description of
+Print original air date, rating, and description of
 season 2 episode 12 of \fIThe Wire\fR:
 
-    ep -adr -s2 -e12 the wire
-    ep --air --description --rating --season=2 --episode=12 the wire
+    tvi -adr -s2 -e12 the wire
+    tvi --air --description --rating --season=2 --episode=12 the wire
 
 Print rating of season 5 episode 14 of AMC's \fIBreaking Bad\fR:
 
-    ep -r -s5 -e16 breaking bad
+    tvi -r -s5 -e16 breaking bad
+
+Print general info about HBO's \fIGame of Thrones\fR:
+
+    tvi --info game of thrones
+
+Print and ratings for episodes 5, 6 and 7 from season 4 of AMC's
+\fIMad Men\fR:
+
+    tvi -r -s4 -e5,6,7 mad men
+
+Print and descriptions for episode 1 of seasons 1, 2 and 3 of Showtime's
+\fIHomeland\fR:
+
+    tvi -d -s1,2,3 -e1 homeland
 
 .SH AUTHOR
 Written by Nathan Forbes.

@@ -1,8 +1,8 @@
-bin_PROGRAMS = ep
-dist_man_MANS = ep.1
+bin_PROGRAMS = tvi
+dist_man_MANS = tvi.1
 
 ep_SOURCES = \
-	ep.c
+	tvi.c
 
 EXTRA_DIST = \
 	README.md
