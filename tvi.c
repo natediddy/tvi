@@ -25,7 +25,7 @@
 #ifdef PACKAGE_VERSION
 # define PROGRAM_VERSION PACKAGE_VERSION
 #else
-# define PROGRAM_VERSION "2.5.0"
+# define PROGRAM_VERSION "2.6.0"
 #endif
 
 #define TVDOTCOM "http://www.tv.com"
@@ -68,6 +68,7 @@
 
 #define SERIES_TITLE_PATTERN        "<title>"
 #define SERIES_DESCRIPTION_PATTERN  "\"og:description\" content=\""
+#define SERIES_AIRS_ON_PATTERN      "class=\"tagline\">"
 #define SEASON_PATTERN              "<strong>Season %u"
 #define EPISODE_PATTERN             "Episode %u\r\n"
 #define EPISODE_AIR_PATTERN         "class=\"date\">"
@@ -198,6 +199,7 @@ struct episode
 struct season
 {
     int total_episodes;
+    double rating;
     struct episode episode[XBUFMAX];
 };
 
@@ -212,8 +214,10 @@ struct series
 {
     int total_episodes;
     int total_seasons;
+    double rating;
     char air_start[XBUFMAX];
     char air_end[XBUFMAX];
+    char airs_on[XBUFMAX];
     struct season season[XBUFMAX];
     struct series_title title;
     char *description;
@@ -242,7 +246,6 @@ struct tvi_options
 };
 
 static const char *        program_name;
-static long                response = 0L;
 static struct page_content page     = {0, NULL};
 static struct series *     series   = NULL;
 
@@ -379,48 +382,6 @@ static int xstrncasecmp(const char *s1, const char *s2, size_t n)
     while ((result = tolower(*p1) - tolower(*p2++)) == 0)
         if (*p1++ == '\0' || --n == 0)
             break;
-    return result;
-}
-
-static long long xstrtoll(const char *s)
-{
-    long long result;
-
-    result = 0LL;
-    if (s && *s)
-    {
-        int sign = 1;
-        long long g = 0LL;
-        while (isspace(*s))
-            s++;
-        if (*s == '-')
-            sign = -1;
-        while (*s)
-        {
-            if (isdigit(*s))
-            {
-                g = g * 10LL + *s++ - '0';
-                continue;
-            }
-            s++;
-        }
-        result = g * sign;
-    }
-    return result;
-}
-
-static int xstrtoi(const char *s)
-{
-    int result;
-    long long n;
-
-    n = xstrtoll(s);
-    if (n > INT_MAX)
-        result = INT_MAX;
-    else if (n < INT_MIN)
-        result = INT_MIN;
-    else
-        result = (int)n;
     return result;
 }
 
@@ -712,11 +673,11 @@ static bool try_connect(const char *url)
     progress_finish();
     if (status != CURLE_OK)
     {
-        response = 0L;
+        long res = 0L;
         if (curl_easy_getinfo(cp, CURLINFO_RESPONSE_CODE,
-                              &response) == CURLE_OK)
+                              &res) == CURLE_OK)
             xerror(0, "%s (http response=%li)",
-                   curl_easy_strerror(status), response);
+                   curl_easy_strerror(status), res);
         else
             xerror(0, curl_easy_strerror(status));
         result = false;
@@ -861,6 +822,21 @@ static void parse_series_description(void)
         xdebug("failed to parse series description");
 }
 
+static void parse_series_airs_on(void)
+{
+    char *a;
+    char *p;
+
+    p = strstr(page.buffer, SERIES_AIRS_ON_PATTERN);
+    if (p && *p)
+    {
+        p += strlen(SERIES_AIRS_ON_PATTERN);
+        for (a = series->airs_on; *p != '<'; ++a, ++p)
+            *a = *p;
+        *a = '\0';
+    }
+}
+
 static void parse_episodes_page(void)
 {
     int x;
@@ -868,6 +844,7 @@ static void parse_episodes_page(void)
 
     parse_series_proper_title();
     parse_series_description();
+    parse_series_airs_on();
 
     for (x = 1;; ++x)
     {
@@ -886,6 +863,8 @@ static void init_series(void)
     series->total_episodes = 0;
     series->total_seasons = 0;
 
+    series->rating = 0.0f;
+
     series->air_start[0] = '\0';
     series->air_end[0] = '\0';
 
@@ -899,6 +878,7 @@ static void init_series(void)
 static void init_season(struct season *season)
 {
     season->total_episodes = 0;
+    season->rating = 0.0f;
 }
 
 static void init_episode(struct episode *episode)
@@ -1067,6 +1047,18 @@ static void parse_episode_description(struct episode *episode, char **secp)
                episode->title);
 }
 
+static void set_season_rating(struct season *season)
+{
+    int e;
+    double x;
+
+    /* get average of all episode ratings this season */
+    x = 0.0f;
+    for (e = 0; e < season->total_episodes; ++e)
+        x += season->episode[e].rating;
+    season->rating = x / season->total_episodes;
+}
+
 static void parse_season_page(struct season *season)
 {
     int x;
@@ -1086,6 +1078,7 @@ static void parse_season_page(struct season *season)
         parse_episode_rating(&season->episode[x], &p);
         parse_episode_description(&season->episode[x], &p);
     }
+    set_season_rating(season);
 }
 
 static void set_series_start_end_airs(void)
@@ -1113,13 +1106,24 @@ static void set_series_total_episodes(void)
         series->total_episodes += series->season[s].total_episodes;
 }
 
+static void set_series_rating(void)
+{
+    int s;
+    double x;
+
+    /* get average of all season ratings for a rating of the entire series */
+    x = 0.0f;
+    for (s = 0; s < series->total_seasons; ++s)
+        x += series->season[s].rating;
+    series->rating = x / series->total_seasons;
+}
+
 static void retrieve_series(const struct tvi_options *x)
 {
     search_url(search);
     if (try_connect(url_search))
     {
         parse_search_page();
-        xdebug("series->title.url=\"%s\"", series->title.url);
         episodes_url(e);
         if (try_connect(url_e))
         {
@@ -1167,10 +1171,18 @@ static void display_series(const struct tvi_options *x)
     int s;
 
     if (x->info)
-        printf("%s (%i seasons, %i episodes) %s - %s\n    %s\n",
+    {
+        printf("%s (%i seasons, %i episodes) %s - %s\n",
                 series->title.proper, series->total_seasons,
-                series->total_episodes, series->air_start, series->air_end,
-                series->description);
+                series->total_episodes, series->air_start, series->air_end);
+        printf("Airs %s\n", series->airs_on);
+        for (s = 0; s < series->total_seasons; ++s)
+            printf("Season %i overall rating: %.1f\n",
+                   s + 1, series->season[s].rating);
+        printf("Series overall rating: %.1f\n", series->rating);
+        printf("    %s\n", series->description);
+        return;
+    }
 
     /* seasons specified: no
        episodes specified: no */
@@ -1303,7 +1315,7 @@ static bool parse_spec_from_optarg(struct spec *s, char *arg)
             return false;
 
     for (p = strtok(arg, SPEC_DELIM_S); p; p = strtok(NULL, SPEC_DELIM_S))
-        s->v[s->n++] = xstrtoi(p);
+        s->v[s->n++] = (int)strtoll(p, (char **)NULL, 10);
 
     return true;
 }
@@ -1388,6 +1400,22 @@ int main(int argc, char **argv)
                 usage(true);
                 break;
         }
+    }
+
+    if (x.info)
+    {
+        if (x.air)
+            xerror(0, "options --info and --air are mutually exclusive");
+        if (x.description)
+            xerror(0, "options --info and --desc are mutually exclusive");
+        if (x.rating)
+            xerror(0, "options --info and --rating are mutually exclusive");
+        if (x.s.n > 0)
+            xerror(0, "options --info and --season are mutually exclusive");
+        if (x.e.n > 0)
+            xerror(0, "options --info and --episode are mutually exclusive");
+        if (x.air || x.description || x.rating || x.s.n > 0 || x.e.n > 0)
+            exit(E_OPTION);
     }
 
     if (argc <= optind)
