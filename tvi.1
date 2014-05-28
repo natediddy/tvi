@@ -1,9 +1,9 @@
-.TH TVI 1 "May 2014" "2.6.0" "User Commands"
+.TH TVI 1 "May 2014" "3.0.0" "User Commands"
 .SH NAME
 tvi \- display information about a television series
 .SH SYNOPSIS
 .B tvi
-[\-\fBadir\fR] [\-\fBs\fR\fIN\fR[,\fIN\fR,...]] [\-\fBe\fR\fIN\fR[,\fIN\fR,...]] \fITITLE\fR
+[\-\fBadHilLnr\fR] [\-\fBs\fR\fIN\fR[,\fIN\fR,...]] [\-\fBe\fR\fIN\fR[,\fIN\fR,...]] \fITITLE\fR
 .SH DESCRIPTION
 .PP
 Retrieve episode information about a TV series.
@@ -24,11 +24,23 @@ print air date for each episode
 \fB\-d\fR, \fB\-\-description\fR
 print description for each episode
 .TP
-\fB\-r\fR, \fB\-\-rating\fR
-print rating for each episode
+\fB-H\fR, \fB\-\-highest-rated\fR
+print highest rated episode(s) of \fITITLE\fR
 .TP
 \fB\-i\fR, \fB\-\-info\fR
 print general info about \fITITLE\fR
+.TP
+\fB\-l\fR, \fB\-\-last\fR
+print the most recently aired episode
+.TP
+\fB\-L\fR, \fB\-\-lowest-rated\fR
+print lowest rated episode(s) of \fITITLE\fR
+.TP
+\fB\-n\fR, \fB\-\-next\fR
+print the next upcoming episode scheduled to air
+.TP
+\fB\-r\fR, \fB\-\-rating\fR
+print rating for each episode
 .TP
 \fB\-h\fR, \fB\-\-help\fR
 print help message and exit
@@ -36,7 +48,14 @@ print help message and exit
 \fB\-v\fR, \fB\-\-version\fR
 print version info and exit
 .SH "EXIT STATUS"
-Returns zero on success, and non-zero if an error occurred.
+.TP
+0    no errors detected
+.TP
+1    an error relating to a command line option was detected
+.TP
+2    an error relating to the internet was detected
+.TP
+3    a serious system error was detected
 .SH EXAMPLES
 .nf
 Print the titles of all episodes in HBO's \fIThe Wire\fR:
@@ -66,6 +85,15 @@ Print and descriptions for episode 1 of seasons 1, 2 and 3 of Showtime's
 \fIHomeland\fR:
 
     tvi -d -s1,2,3 -e1 homeland
+
+Print information about all-time highest rated episode(s) for HBO's
+\fIThe Sopranos\fR:
+
+    tvi -H the sopranos
+
+Print information about all-time lowest rated episode(s) for \fIThe Sopranos\fR:
+
+    tvi -L the sopranos
 
 .SH AUTHOR
 Written by Nathan Forbes.
