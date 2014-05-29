@@ -6,7 +6,7 @@ All TV series data is obtained from [TV.com](http://www.tv.com/).
 
 Usage
 -----
-    Usage: tvi [-adir] [-sN[,N,...]] [-eN[,N,...]] TITLE
+    Usage: tvi [-adHilLnr] [-sN[,N,...]] [-eN[,N,...]] TITLE
 
 Options
 -------
@@ -18,6 +18,10 @@ Options
                           comma-separated list: N1,N2,N3,...
     -a, --air             print air date for each episode
     -d, --description     print description for each episode
+    -H, --highest-rated   print highest rated episode of series
+    -l, --last            print most recently aired episode
+    -L, --lowest-rated    print lowest rated episode of series
+    -n, --next            print the next upcoming episode scheduled to air
     -r, --rating          print rating for each episode
     -i, --info            print general info about TITLE
     -h, --help            print this text and exit

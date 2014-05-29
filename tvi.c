@@ -446,7 +446,7 @@ static char *xstrdup(const char *s, ssize_t n)
 static void usage(bool had_error)
 {
     fprintf((!had_error) ? stdout : stderr,
-            "Usage: %s [-adirt] [-sN[,N,...]] [-eN[,N,...]] TITLE\n",
+            "Usage: %s [-adHilLnr] [-sN[,N,...]] [-eN[,N,...]] TITLE\n",
             program_name);
 
     if (!had_error)
