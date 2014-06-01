@@ -46,7 +46,7 @@
 #ifdef PACKAGE_VERSION
 # define PROGRAM_VERSION PACKAGE_VERSION
 #else
-# define PROGRAM_VERSION "3.0.1"
+# define PROGRAM_VERSION "3.1.0"
 #endif
 
 #define TVDOTCOM "http://www.tv.com"
@@ -269,16 +269,22 @@ struct spec
   int v[XBUFMAX];
 };
 
+enum
+{
+  E_ATTR_0           = 0,
+  E_ATTR_AIR         = 0x01,
+  E_ATTR_DESCRIPTION = 0x02,
+  E_ATTR_RATING      = 0x04
+};
+
 struct tvi_options
 {
-  bool air;
-  bool description;
   bool highest_rated;
   bool info;
   bool last;
   bool lowest_rated;
   bool next;
-  bool rating;
+  int episode_attrs;
   struct spec e;
   struct spec s;
 };
@@ -899,18 +905,49 @@ parse_series_airs_on (void)
 }
 
 static void
+spec_append (struct spec *s, int value)
+{
+  s->v[s->n++] = value;
+}
+
+static bool
+spec_parse_from_optarg (struct spec *s, char *arg)
+{
+  char *p;
+
+  for (p = arg; *p; ++p)
+    if (!isdigit (*p) && *p != SPEC_DELIM_C)
+      return false;
+
+  for (p = strtok (arg, SPEC_DELIM_S); p; p = strtok (NULL, SPEC_DELIM_S))
+    spec_append (s, (int) strtoll (p, (char **) NULL, 10));
+  return true;
+}
+
+static bool
+spec_contains (const struct spec *s, int value)
+{
+  int i;
+
+  for (i = 0; i < s->n; ++i)
+    if (s->v[i] == value)
+      return true;
+  return false;
+}
+
+static void
 parse_episodes_page (void)
 {
-  int x;
+  int i;
   char *p;
 
   parse_series_proper_title ();
   parse_series_description ();
   parse_series_airs_on ();
 
-  for (x = 1;; ++x)
+  for (i = 1;; ++i)
   {
-    season_pattern (s, x);
+    season_pattern (s, i);
     p = strstr (page.buffer, html_pattern_s);
     if (!p)
       break;
@@ -1119,18 +1156,46 @@ parse_episode_description (struct episode *episode, char **secp)
 }
 
 static void
+get_air_time_from_airs_on (char *buffer)
+{
+  char *p;
+  char *q;
+
+  p = strchr (series->airs_on, ':');
+  if (p && *p)
+  {
+    for (; *p != ' '; --p)
+      ;
+    if (*p == ' ')
+    {
+      q = buffer;
+      *q = ' ';
+      for (p++, q++; *p != ' '; ++p, ++q)
+        *q = *p;
+      *q = '\0';
+    }
+  }
+}
+
+static void
 set_episode_has_aired (struct episode *episode)
 {
+  size_t n;
   time_t a;
+  char buffer[XBUFMAX];
   struct tm t;
 
+  n = strlen (episode->air);
+  memcpy (buffer, episode->air, n + 1);
+  get_air_time_from_airs_on (buffer + n);
+
   memset (&t, 0, sizeof (struct tm));
-  strptime (episode->air, "%m/%d/%y", &t);
+  strptime (buffer, "%m/%d/%y %I:%M %p", &t);
 
   a = mktime (&t);
   if (a == -1)
   {
-    xerror (0, "failed to get time value from air date \"%s\"", episode->air);
+    xerror (0, "failed to get time value from air date/time \"%s\"", buffer);
     return;
   }
 
@@ -1166,23 +1231,25 @@ set_season_rating (struct season *season)
 static void
 parse_season_page (struct season *season)
 {
-  int x;
+  int i;
   char *p;
+  struct episode *episode;
 
   init_season (season);
-  for (x = 0;; ++x)
+  for (i = 0;; ++i)
   {
-    episode_pattern (e, x + 1);
+    episode_pattern (e, i + 1);
     p = strstr (page.buffer, html_pattern_e);
     if (!p)
       break;
     season->total_episodes++;
-    init_episode (&season->episode[x]);
-    parse_episode_title (&season->episode[x], &p);
-    parse_episode_air (&season->episode[x], &p);
-    parse_episode_rating (&season->episode[x], &p);
-    parse_episode_description (&season->episode[x], &p);
-    set_episode_has_aired (&season->episode[x]);
+    episode = &season->episode[i];
+    init_episode (episode);
+    parse_episode_title (episode, &p);
+    parse_episode_air (episode, &p);
+    set_episode_has_aired (episode);
+    parse_episode_rating (episode, &p);
+    parse_episode_description (episode, &p);
   }
   set_season_rating (season);
 }
@@ -1268,7 +1335,7 @@ display_episode (int s, int e, const struct tvi_options *x)
 
   printf ("Season %02i Episode %02i: %s", s + 1, e + 1, episode->title);
 
-  if (x->rating)
+  if (x->episode_attrs & E_ATTR_RATING)
   {
     if (episode->has_aired)
       printf (" - %.1f", episode->rating);
@@ -1276,9 +1343,9 @@ display_episode (int s, int e, const struct tvi_options *x)
       fputs (" - not rated", stdout);
   }
 
-  if (x->air)
+  if (x->episode_attrs & E_ATTR_AIR)
   {
-    if (x->rating)
+    if (x->episode_attrs & E_ATTR_RATING)
       fputs (" -", stdout);
     fputc (' ', stdout);
     if (episode->has_aired)
@@ -1290,7 +1357,7 @@ display_episode (int s, int e, const struct tvi_options *x)
 
   fputc('\n', stdout);
 
-  if (x->description)
+  if (x->episode_attrs & E_ATTR_DESCRIPTION)
     printf ("    %s\n\n", episode->description);
 }
 
@@ -1429,22 +1496,24 @@ verify_options (const struct tvi_options *x)
 
   if (x->info)
   {
-    if (x->air)
+    if (x->episode_attrs & E_ATTR_AIR)
       xerror (0, "options --info and --air are mutually exclusive");
-    if (x->description)
+    if (x->episode_attrs & E_ATTR_DESCRIPTION)
       xerror (0, "options --info and --desc are mutually exclusive");
     if (x->last)
       xerror (0, "options --info and --last are mutually exclusive");
     if (x->next)
       xerror (0, "options --info and --next are mutually exclusive");
-    if (x->rating)
+    if (x->episode_attrs & E_ATTR_RATING)
       xerror (0, "options --info and --rating are mutually exclusive");
     if (x->s.n > 0)
       xerror (0, "options --info and --season are mutually exclusive");
     if (x->e.n > 0)
       xerror (0, "options --info and --episode are mutually exclusive");
-    if (x->air || x->description || x->last ||
-        x->next || x->rating || x->s.n > 0 || x->e.n > 0)
+    if (x->episode_attrs & E_ATTR_AIR ||
+        x->episode_attrs & E_ATTR_DESCRIPTION || x->last ||
+        x->next || x->episode_attrs & E_ATTR_RATING ||
+        x->s.n > 0 || x->e.n > 0)
       usage (true);
   }
 
@@ -1469,12 +1538,6 @@ verify_options (const struct tvi_options *x)
     if (x->s.n > 0 || x->e.n > 0)
       usage (true);
   }
-}
-
-static void
-append_to_spec (struct spec *s, int value)
-{
-  s->v[s->n++] = value;
 }
 
 static void
@@ -1679,12 +1742,10 @@ verify_options_with_series (struct tvi_options *x)
     else
       find_lowest_rated_episode (sa, ea);
     for (s = 0; sa[s] != -1; ++s)
-      append_to_spec (&x->s, sa[s] + 1);
+      spec_append (&x->s, sa[s] + 1);
     for (e = 0; ea[e] != -1; ++e)
-      append_to_spec (&x->e, ea[e] + 1);
-    x->air = true;
-    x->description = true;
-    x->rating = true;
+      spec_append (&x->e, ea[e] + 1);
+    x->episode_attrs |= E_ATTR_AIR | E_ATTR_DESCRIPTION | E_ATTR_RATING;
     return;
   }
 
@@ -1699,12 +1760,11 @@ verify_options_with_series (struct tvi_options *x)
       s++;
       e++;
     }
-    append_to_spec (&x->s, s);
-    append_to_spec (&x->e, e);
-    x->air = true;
-    x->description = true;
+    spec_append (&x->s, s);
+    spec_append (&x->e, e);
+    x->episode_attrs |= E_ATTR_AIR | E_ATTR_DESCRIPTION;
     if (x->last)
-      x->rating = true;
+      x->episode_attrs |= E_ATTR_RATING;
     return;
   }
 
@@ -1777,31 +1837,15 @@ verify_options_with_series (struct tvi_options *x)
   }
 }
 
-static bool
-parse_spec_from_optarg (struct spec *s, char *arg)
-{
-  char *p;
-
-  for (p = arg; *p; ++p)
-    if (!isdigit (*p) && *p != SPEC_DELIM_C)
-      return false;
-
-  for (p = strtok (arg, SPEC_DELIM_S); p; p = strtok (NULL, SPEC_DELIM_S))
-    append_to_spec (s, (int) strtoll (p, (char **) NULL, 10));
-  return true;
-}
-
 static void
 init_tvi_options (struct tvi_options *x)
 {
-  x->air = false;
-  x->description = false;
   x->highest_rated = false;
   x->info = false;
   x->last = false;
   x->lowest_rated = false;
   x->next = false;
-  x->rating = false;
+  x->episode_attrs = E_ATTR_0;
   x->e.n = 0;
   x->s.n = 0;
 }
@@ -1842,13 +1886,13 @@ main (int argc, char **argv)
     switch (c)
     {
       case 'a':
-        x.air = true;
+        x.episode_attrs |= E_ATTR_AIR;
         break;
       case 'd':
-        x.description = true;
+        x.episode_attrs |= E_ATTR_DESCRIPTION;
         break;
       case 'e':
-        if (!parse_spec_from_optarg (&x.e, optarg))
+        if (!spec_parse_from_optarg (&x.e, optarg))
         {
           xerror (0, "invalid episode argument -- `%s'", optarg);
           die (E_OPTION, SPEC_ERROR_MESSAGE);
@@ -1873,10 +1917,10 @@ main (int argc, char **argv)
         x.next = true;
         break;
       case 'r':
-        x.rating = true;
+        x.episode_attrs |= E_ATTR_RATING;
         break;
       case 's':
-        if (!parse_spec_from_optarg (&x.s, optarg))
+        if (!spec_parse_from_optarg (&x.s, optarg))
         {
           xerror (0, "invalid season argument -- `%s'", optarg);
           die (E_OPTION, SPEC_ERROR_MESSAGE);
