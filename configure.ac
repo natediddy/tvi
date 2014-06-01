@@ -3,7 +3,7 @@ AC_INIT(
   [3.1.0],
   [sforbes41@gmail.com],
   [tvi],
-  [https://github.com/natediddy/ep],
+  [https://github.com/natediddy/tvi],
 )
 
 AC_MSG_NOTICE([Configuring $PACKAGE_NAME $PACKAGE_VERSION])
