@@ -1,7 +1,7 @@
 bin_PROGRAMS = tvi
 dist_man_MANS = tvi.1
 
-ep_SOURCES = \
+tvi_SOURCES = \
 	tvi.c
 
 EXTRA_DIST = \

@@ -46,7 +46,7 @@
 #ifdef PACKAGE_VERSION
 # define PROGRAM_VERSION PACKAGE_VERSION
 #else
-# define PROGRAM_VERSION "3.1.0"
+# define PROGRAM_VERSION "3.1.1"
 #endif
 
 #define TVDOTCOM "http://www.tv.com"
@@ -269,13 +269,10 @@ struct spec
   int v[XBUFMAX];
 };
 
-enum
-{
-  E_ATTR_0           = 0,
-  E_ATTR_AIR         = 0x01,
-  E_ATTR_DESCRIPTION = 0x02,
-  E_ATTR_RATING      = 0x04
-};
+#define E_ATTR_0           0
+#define E_ATTR_AIR         0x01
+#define E_ATTR_DESCRIPTION 0x02
+#define E_ATTR_RATING      0x04
 
 struct tvi_options
 {
@@ -284,7 +281,7 @@ struct tvi_options
   bool last;
   bool lowest_rated;
   bool next;
-  int episode_attrs;
+  char episode_attrs;
   struct spec e;
   struct spec s;
 };
