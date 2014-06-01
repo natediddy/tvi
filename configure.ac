@@ -32,6 +32,12 @@ AS_IF(
   []
 )
 
+AS_IF(
+  [test x$enable_debug = xyes],
+  [CFLAGS="$CFLAGS -g"],
+  []
+)
+
 AC_CHECK_LIB(curl, curl_easy_init, [LIBS="$LIBS -lcurl"],
              [AC_ERROR([libcurl is required to build tvi, if you do not
                         have it, you can get it from

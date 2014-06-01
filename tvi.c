@@ -819,6 +819,12 @@ parse_search_page (void)
       *u = '\0';
     }
   }
+
+  if (!*series->title.url)
+  {
+    xerror (0, "failed to find title \"%s\"", series->title.given);
+    exit (E_INTERNET);
+  }
 }
 
 static void
