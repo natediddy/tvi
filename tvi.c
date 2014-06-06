@@ -46,24 +46,27 @@
 #ifdef PACKAGE_VERSION
 # define PROGRAM_VERSION PACKAGE_VERSION
 #else
-# define PROGRAM_VERSION "3.1.1"
+# define PROGRAM_VERSION "3.2.0"
 #endif
 
 #define TVDOTCOM "http://www.tv.com"
 
 #define HELP_TEXT \
   "Options:\n" \
-  "\n" \
-  "  Mandatory arguments to long options are mandatory for short options " \
-    "too.\n" \
-  "\n" \
-  "  -e, --episode=N[,N,...]   specify episode(s) N...\n" \
+  "  -eN, --episode=N          specify episode(s) N\n" \
   "                            For more than one episode, use a\n" \
   "                            comma-separated list (e.g. \"1,2,3\").\n" \
-  "  -s, --season=N[,N,...]    specify season(s) N...\n" \
+  "  -sN, --season=N           specify season(s) N\n" \
   "                            For more than one season, use a\n" \
   "                            comma-separated list (e.g. \"1,2,3\").\n" \
   "  -a, --air                 print the air date for each episode\n" \
+  "  -cNAME, --cast=NAME       print cast and crew members\n" \
+  "                            If NAME is given, and it matches a cast\n" \
+  "                            member's name, their respective role is\n" \
+  "                            printed. On the other hand if NAME matches\n" \
+  "                            a cast member's role, their respective\n" \
+  "                            name is printed. If NAME is not given, all\n" \
+  "                            cast and crew members are printed.\n" \
   "  -d, --description         print description for each episode\n" \
   "  -H, --highest-rated       print highest rated episode of series\n" \
   "  -l, --last                print the most recently aired episode\n" \
@@ -73,9 +76,7 @@
   "  -r, --rating              print rating for each episode\n" \
   "  -h, --help                print this text and exit\n" \
   "  -v, --version             print version information and exit\n" \
-  "\n" \
   "Only 1 TITLE can be provided at a time.\n" \
-  "\n" \
   "All TV series data is obtained from <" TVDOTCOM "/>.\n"
 
 #define VERSION_TEXT \
@@ -84,17 +85,20 @@
 
 #define SEARCH_URL   TVDOTCOM "/search?q=%s/"
 #define EPISODES_URL TVDOTCOM "/shows/%s/episodes/"
+#define CAST_URL     TVDOTCOM "/shows/%s/cast/"
 #define SEASON_URL   TVDOTCOM "/shows/%s/season-%u/"
 
 #define USERAGENT PROGRAM_NAME "(TV series Info)/" PROGRAM_VERSION
 
+#define DESCRIPTION_INDENT_SIZE 4
 #define PROPELLER_SIZE          4
 #define FALLBACK_CONSOLE_WIDTH 40
 #define MILLIS_PER_SECOND    1000
 
 #define SERIES_TITLE_PATTERN        "<title>"
 #define SERIES_DESCRIPTION_PATTERN  "\"og:description\" content=\""
-#define SERIES_AIRS_ON_PATTERN      "class=\"tagline\">"
+#define SERIES_TAGLINE_PATTERN      "class=\"tagline\">"
+#define TAGLINE_ENDED               "ended"
 #define SEASON_PATTERN              "<strong>Season %u"
 #define EPISODE_PATTERN             "Episode %u\r\n"
 #define EPISODE_AIR_PATTERN         "class=\"date\">"
@@ -102,27 +106,25 @@
 #define EPISODE_RATING_PATTERN      "_rating"
 #define SEARCH_SHOW_PATTERN         "class=\"result show\">"
 #define SEARCH_HREF_PATTERN         " href=\"/shows/"
+#define CAST_NAME_PATTERN           "<a itemprop=\"name\""
+#define CAST_ROLE_PATTERN           "<div class=\"role\">"
 
-#define XBUFMAX 1024
+#define XBUFMAX 256
 
-#define EMPTY_SERIES_DESCRIPTION  "N/A"
-#define EMPTY_EPISODE_DESCRIPTION "N/A"
+#define EMPTY_DESCRIPTION "(no description)"
 
 #define SPEC_DELIM_C ','
 #define SPEC_DELIM_S ","
 #define SPEC_ERROR_MESSAGE \
-  "must be of the form \"N" SPEC_DELIM_S "N" SPEC_DELIM_S "N" SPEC_DELIM_S \
-  "...\" (e.g. \"1" SPEC_DELIM_S "23\", \"4\", \"5" SPEC_DELIM_S "6" \
-  SPEC_DELIM_S "7\", etc.)"
+  "must be of the form \"N,N,N...\" (e.g. \"1,23\", \"4\", \"5,6,7\", etc.)"
 
 #define PROGRESS_LOADING_MESSAGE "Loading... "
 
 #define ENCODE_CHARS "!@#$%^&*()=+{}[]|\\;':\",<>/? "
 
-#define TITLE series->title.proper
-
-#define SEASON(n)          series->season[(n)]
-#define LAST_SEASON        SEASON (series->total_seasons - 1)
+#define TITLE              series.title.proper
+#define SEASON(n)          series.season[(n)]
+#define LAST_SEASON        SEASON (series.total_seasons - 1)
 #define EPISODE(s, n)      s.episode[(n)]
 #define LAST_EPISODE_OF(s) s.episode[s.total_episodes - 1]
 
@@ -194,11 +196,15 @@ static const bool has___XFUNCTION__ = false;
 
 #define episodes_url(name) \
   char url_var__ (name)[XBUFMAX]; \
-  snprintf (url_var__ (name), XBUFMAX, EPISODES_URL, series->title.url)
+  snprintf (url_var__ (name), XBUFMAX, EPISODES_URL, series.title.url)
+
+#define cast_url(name) \
+  char url_var__ (name)[XBUFMAX]; \
+  snprintf (url_var__ (name), XBUFMAX, CAST_URL, series.title.url)
 
 #define season_url(name, n) \
   char url_var__ (name)[XBUFMAX]; \
-  snprintf (url_var__ (name), XBUFMAX, SEASON_URL, series->title.url, (n))
+  snprintf (url_var__ (name), XBUFMAX, SEASON_URL, series.title.url, (n))
 
 #define __html_pat_var(name) html_pattern_ ## name
 #define html_pat_var__(name) __html_pat_var (name)
@@ -237,7 +243,27 @@ struct season
   struct episode episode[XBUFMAX];
 };
 
-struct series_title
+struct person
+{
+  char name[XBUFMAX];
+  char role[XBUFMAX];
+};
+
+struct cast
+{
+  int total_persons;
+  struct person person[XBUFMAX];
+};
+
+struct schedule
+{
+  bool ended;
+  char day[XBUFMAX];
+  char time[XBUFMAX];
+  char network[XBUFMAX];
+};
+
+struct title
 {
   char proper[XBUFMAX]; /* proper (e.g. "The Wire") */
   char url[XBUFMAX];    /* for URL (e.g. "the-wire") */
@@ -249,11 +275,12 @@ struct series
   int total_episodes;
   int total_seasons;
   double rating;
+  struct cast cast;
+  struct schedule schedule;
+  struct title title;
   char air_start[XBUFMAX];
   char air_end[XBUFMAX];
-  char airs_on[XBUFMAX];
   struct season season[XBUFMAX];
-  struct series_title title;
   char *description;
 };
 
@@ -269,6 +296,18 @@ struct spec
   int v[XBUFMAX];
 };
 
+struct token
+{
+  size_t n;
+  char str[XBUFMAX];
+};
+
+struct query
+{
+  int total_tokens;
+  struct token token[XBUFMAX];
+};
+
 #define E_ATTR_0           0
 #define E_ATTR_AIR         0x01
 #define E_ATTR_DESCRIPTION 0x02
@@ -276,6 +315,7 @@ struct spec
 
 struct tvi_options
 {
+  bool cast;
   bool highest_rated;
   bool info;
   bool last;
@@ -284,15 +324,28 @@ struct tvi_options
   char episode_attrs;
   struct spec e;
   struct spec s;
+  char cast_req[XBUFMAX];
 };
 
-static const char *        program_name;
-static struct page_content page     = {0, NULL};
-static struct series *     series   = NULL;
+static const char *program_name;
+static struct series series;
+static size_t n_series_title_pattern = 0;
+static size_t n_series_description_pattern  = 0;
+static size_t n_series_tagline_pattern = 0;
+static size_t n_tagline_ended = 0;
+static size_t n_episode_air_pattern = 0;
+static size_t n_episode_description_pattern = 0;
+static size_t n_episode_rating_pattern = 0;
+static size_t n_search_show_pattern = 0;
+static size_t n_search_href_pattern = 0;
+static size_t n_cast_name_pattern = 0;
+static size_t n_cast_role_pattern = 0;
+static struct page_content page = {0, NULL};
 
 static struct option const options[] =
 {
   {"air", no_argument, NULL, 'a'},
+  {"cast", optional_argument, NULL, 'c'},
   {"desc", no_argument, NULL, 'd'},
   {"episode", required_argument, NULL, 'e'},
   {"help", no_argument, NULL, 'h'},
@@ -302,7 +355,9 @@ static struct option const options[] =
   {"lowest-rated", no_argument, NULL, 'L'},
   {"next", no_argument, NULL, 'n'},
   {"rating", no_argument, NULL, 'r'},
+  /*{"reviews", no_argument, NULL, 'R'},*/
   {"season", required_argument, NULL, 's'},
+  /*{"trivia", no_argument, NULL, 't'},*/
   {"version", no_argument, NULL, 'v'},
   {NULL, 0, NULL, 0}
 };
@@ -482,7 +537,8 @@ static void
 usage (bool had_error)
 {
   fprintf ((!had_error) ? stdout : stderr,
-           "Usage: %s [-adHilLnr] [-sN[,N,...]] [-eN[,N,...]] TITLE\n",
+           "Usage: %s [-adHilLnr] [-c[NAME]] [-sN[,N,...]] [-eN[,N,...]] "
+             "TITLE\n",
            program_name);
 
   if (!had_error)
@@ -519,6 +575,22 @@ strip_trailing_space (char *s)
 }
 
 static void
+set_pattern_sizes (void)
+{
+  n_series_title_pattern = strlen (SERIES_TITLE_PATTERN);
+  n_series_description_pattern = strlen (SERIES_DESCRIPTION_PATTERN);
+  n_series_tagline_pattern = strlen (SERIES_TAGLINE_PATTERN);
+  n_tagline_ended = strlen (TAGLINE_ENDED);
+  n_episode_air_pattern = strlen (EPISODE_AIR_PATTERN);
+  n_episode_description_pattern = strlen (EPISODE_DESCRIPTION_PATTERN);
+  n_episode_rating_pattern = strlen (EPISODE_RATING_PATTERN);
+  n_search_show_pattern = strlen (SEARCH_SHOW_PATTERN);
+  n_search_href_pattern = strlen (SEARCH_HREF_PATTERN);
+  n_cast_name_pattern = strlen (CAST_NAME_PATTERN);
+  n_cast_role_pattern = strlen (CAST_ROLE_PATTERN);
+}
+
+static void
 set_series_given_title (char **item)
 {
   size_t n;
@@ -535,9 +607,9 @@ set_series_given_title (char **item)
   }
 
   pos = 0;
-  series->title.given = xnewa (char, n + 1);
+  series.title.given = xnewa (char, n + 1);
 
-  for (p = 0, t = series->title.given; item[p]; ++p)
+  for (p = 0, t = series.title.given; item[p]; ++p)
   {
     n = strlen (item[p]);
     memcpy (t, item[p], n);
@@ -556,10 +628,10 @@ encode_series_given_title (void)
   const char *c;
   const char *s;
 
-  ng = strlen (series->title.given);
+  ng = strlen (series.title.given);
   n = ng;
 
-  for (s = series->title.given; *s; ++s)
+  for (s = series.title.given; *s; ++s)
   {
     for (c = ENCODE_CHARS; *c; ++c)
     {
@@ -572,13 +644,13 @@ encode_series_given_title (void)
   }
 
   if (n == ng)
-    return xstrdup (series->title.given, n);
+    return xstrdup (series.title.given, n);
 
   bool encoded_char;
   char *encoded = xnewa (char, n + 1);
   char *e = encoded;
 
-  for (s = series->title.given; *s; ++s, ++e)
+  for (s = series.title.given; *s; ++s, ++e)
   {
     encoded_char = false;
     for (c = ENCODE_CHARS; *c; ++c)
@@ -802,6 +874,25 @@ entity_ref_char (char **s)
 }
 
 static void
+set_url_title_best_guess (void)
+{
+  char *g;
+  char *u;
+
+  for (g = series.title.given, u = series.title.url; *g; ++g, ++u)
+  {
+    if (*g == '\'' || *g == ':' || *g == '.' || *g == ' ')
+    {
+      if (*g == ' ')
+        *u = '-';
+      continue;
+    }
+    *u = *g;
+  }
+  *u = '\0';
+}
+
+static void
 parse_search_page (void)
 {
   char *p;
@@ -813,17 +904,17 @@ parse_search_page (void)
     if (h)
     {
       char *u;
-      h += strlen (SEARCH_HREF_PATTERN);
-      for (u = series->title.url; *h != '/'; ++h, ++u)
+      h += n_search_href_pattern;
+      for (u = series.title.url; *h != '/'; ++h, ++u)
         *u = *h;
       *u = '\0';
     }
   }
 
-  if (!*series->title.url)
+  if (!*series.title.url)
   {
-    xerror (0, "failed to find title \"%s\"", series->title.given);
-    exit (E_INTERNET);
+    xdebug ("failed to parse title for URL, guessing...");
+    set_url_title_best_guess ();
   }
 }
 
@@ -833,20 +924,20 @@ parse_series_proper_title (void)
   char *p;
   char *t;
 
-  series->title.proper[0] = '\0';
+  series.title.proper[0] = '\0';
   p = strstr (page.buffer, SERIES_TITLE_PATTERN);
 
   if (p && *p)
   {
-    p += strlen (SERIES_TITLE_PATTERN);
-    for (t = series->title.proper; *p && *p != '-'; ++p, ++t)
+    p += n_series_title_pattern;
+    for (t = series.title.proper; *p && *p != '-'; ++p, ++t)
       *t = *p;
     *t = '\0';
   }
 
-  if (!*series->title.proper)
+  if (!*series.title.proper)
     xdebug ("failed to parse proper title");
-  strip_trailing_space (series->title.proper);
+  strip_trailing_space (series.title.proper);
 }
 
 static void
@@ -861,24 +952,24 @@ parse_series_description (void)
 
   if (p && *p)
   {
-    p += strlen (SERIES_DESCRIPTION_PATTERN);
+    p += n_series_description_pattern;
     for (; *p && *p != '"'; ++p, ++n)
       ;
   }
 
   if (n == 0)
   {
-    series->description = xstrdup (EMPTY_SERIES_DESCRIPTION, -1);
+    series.description = xstrdup (EMPTY_DESCRIPTION, -1);
     return;
   }
 
-  series->description = xnewa (char, n + 1);
+  series.description = xnewa (char, n + 1);
   p = strstr (page.buffer, SERIES_DESCRIPTION_PATTERN);
 
   if (p && *p)
   {
-    p += strlen (SERIES_DESCRIPTION_PATTERN);
-    for (d = series->description; *p && *p != '"'; ++d, ++p)
+    p += n_series_description_pattern;
+    for (d = series.description; *p && *p != '"'; ++d, ++p)
     {
       while (is_entity_ref (p))
         *d++ = entity_ref_char (&p);
@@ -887,23 +978,71 @@ parse_series_description (void)
     *d = '\0';
   }
 
-  if (!series->description || !*series->description)
+  if (!series.description || !*series.description)
     xdebug ("failed to parse series description");
 }
 
 static void
-parse_series_airs_on (void)
+parse_series_schedule (void)
 {
-  char *a;
+  char *e;
   char *p;
+  char *q;
+  char tagline[XBUFMAX];
+  struct schedule *s = &series.schedule;
 
-  p = strstr (page.buffer, SERIES_AIRS_ON_PATTERN);
+  p = strstr (page.buffer, SERIES_TAGLINE_PATTERN);
   if (p && *p)
   {
-    p += strlen (SERIES_AIRS_ON_PATTERN);
-    for (a = series->airs_on; *p != '<'; ++a, ++p)
-      *a = *p;
-    *a = '\0';
+    p += n_series_tagline_pattern;
+    for (q = tagline; *p && *p != '<'; ++q, ++p)
+      *q = *p;
+    *q = '\0';
+    e = strstr (tagline, TAGLINE_ENDED);
+    if (e && *e)
+    {
+      /* tagline will be of the form:
+           "NETWORK (ended YEAR)"
+         example: "AMC (ended 2013)" */
+      s->ended = true;
+      for (p = tagline, q = s->network; *p != ' '; ++q, ++p)
+        *q = *p;
+      *q = '\0';
+      e += n_tagline_ended;
+      while (*e == ' ')
+        e++;
+      for (q = s->time; *e != ')'; ++q, ++e)
+        *q = *e;
+      *q = '\0';
+    }
+    else
+    {
+      /* tagline will be of the form:
+           "DAY TIME on NETWORK "
+         example: "Sunday 9:00 PM on HBO " */
+      for (p = tagline, q = s->day; *p != ' '; ++q, ++p)
+        *q = *p;
+      *q = '\0';
+      while (*p == ' ')
+        p++;
+      for (q = s->time; *p != ' '; ++q, ++p)
+        *q = *p;
+      *q = ' ';
+      while (*p == ' ')
+        p++;
+      for (q++; *p != ' '; ++q, ++p)
+        *q = *p;
+      *q = '\0';
+      while (*p == ' ')
+        p++;
+      if (*p == 'o' && *(p + 1) == 'n')
+        p += 2;
+      while (*p == ' ')
+        p++;
+      for (q = s->network; *p && *p != ' '; ++q, ++p)
+        *q = *p;
+      *q = '\0';
+    }
   }
 }
 
@@ -946,7 +1085,7 @@ parse_episodes_page (void)
 
   parse_series_proper_title ();
   parse_series_description ();
-  parse_series_airs_on ();
+  parse_series_schedule ();
 
   for (i = 1;; ++i)
   {
@@ -954,28 +1093,33 @@ parse_episodes_page (void)
     p = strstr (page.buffer, html_pattern_s);
     if (!p)
       break;
-    series->total_seasons++;
+    series.total_seasons++;
   }
 }
 
 static void
 init_series (void)
 {
-  series = xnew (struct series);
+  series.total_episodes = 0;
+  series.total_seasons = 0;
 
-  series->total_episodes = 0;
-  series->total_seasons = 0;
+  series.rating = -1.0f;
 
-  series->rating = -1.0f;
+  series.schedule.ended = false;
+  series.schedule.day[0] = '\0';
+  series.schedule.time[0] = '\0';
+  series.schedule.network[0] = '\0';
 
-  series->air_start[0] = '\0';
-  series->air_end[0] = '\0';
+  series.air_start[0] = '\0';
+  series.air_end[0] = '\0';
 
-  series->title.proper[0] = '\0';
-  series->title.url[0] = '\0';
-  series->title.given = NULL;
+  series.title.proper[0] = '\0';
+  series.title.url[0] = '\0';
+  series.title.given = NULL;
 
-  series->description = NULL;
+  series.cast.total_persons = 0;
+
+  series.description = NULL;
 }
 
 static void
@@ -1028,7 +1172,7 @@ parse_episode_air (struct episode *episode, char **secp)
   p = strstr (*secp, EPISODE_AIR_PATTERN);
   if (p && *p)
   {
-    p += strlen (EPISODE_AIR_PATTERN);
+    p += n_episode_air_pattern;
     for (a = episode->air; *p != '<'; ++a, ++p)
       *a = *p;
     *a = '\0';
@@ -1047,7 +1191,7 @@ parse_episode_rating (struct episode *episode, char **secp)
 
   if (p && *p)
   {
-    p += strlen (EPISODE_RATING_PATTERN);
+    p += n_episode_rating_pattern;
     for (; *p != '>'; ++p)
       ;
     for (p++, r = buffer; *p != '<'; ++r, ++p)
@@ -1072,10 +1216,10 @@ parse_episode_description (struct episode *episode, char **secp)
 
   if (p && *p)
   {
-    p += strlen (EPISODE_DESCRIPTION_PATTERN);
+    p += n_episode_description_pattern;
     if (*p == '<' && *(p + 1) == '/')
     {
-      episode->description = xstrdup (EMPTY_EPISODE_DESCRIPTION, -1);
+      episode->description = xstrdup (EMPTY_DESCRIPTION, -1);
       return;
     }
     for (;;)
@@ -1116,7 +1260,7 @@ parse_episode_description (struct episode *episode, char **secp)
 
   if (p && *p)
   {
-    p += strlen (EPISODE_DESCRIPTION_PATTERN);
+    p += n_episode_description_pattern;
     for (;;)
     {
       if (*p == '<' || *p == '>' || isspace (*p))
@@ -1159,43 +1303,24 @@ parse_episode_description (struct episode *episode, char **secp)
 }
 
 static void
-get_air_time_from_airs_on (char *buffer)
-{
-  char *p;
-  char *q;
-
-  p = strchr (series->airs_on, ':');
-  if (p && *p)
-  {
-    for (; *p != ' '; --p)
-      ;
-    if (*p == ' ')
-    {
-      q = buffer;
-      *q = ' ';
-      for (p++, q++; *p != ' '; ++p, ++q)
-        *q = *p;
-      *q = '\0';
-    }
-  }
-}
-
-static void
 set_episode_has_aired (struct episode *episode)
 {
   size_t n;
   time_t a;
   char buffer[XBUFMAX];
-  struct tm t;
+  struct tm tm;
+  char *t;
 
   n = strlen (episode->air);
   memcpy (buffer, episode->air, n + 1);
-  get_air_time_from_airs_on (buffer + n);
+  t = series.schedule.time;
+  if (*t && strchr (t, ':'))
+    memcpy (buffer + n, t, strlen (t) + 1);
 
-  memset (&t, 0, sizeof (struct tm));
-  strptime (buffer, "%m/%d/%y %I:%M %p", &t);
+  memset (&tm, 0, sizeof (struct tm));
+  strptime (buffer, "%m/%d/%y %I:%M %p", &tm);
 
-  a = mktime (&t);
+  a = mktime (&tm);
   if (a == -1)
   {
     xerror (0, "failed to get time value from air date/time \"%s\"", buffer);
@@ -1239,7 +1364,7 @@ parse_season_page (struct season *season)
   struct episode *episode;
 
   init_season (season);
-  for (i = 0;; ++i)
+  for (i = 0; i < XBUFMAX; ++i)
   {
     episode_pattern (e, i + 1);
     p = strstr (page.buffer, html_pattern_e);
@@ -1258,13 +1383,63 @@ parse_season_page (struct season *season)
 }
 
 static void
+init_person (struct person *person)
+{
+  person->name[0] = '\0';
+  person->role[0] = '\0';
+}
+
+static void
+parse_cast_page (void)
+{
+  int i;
+  char *n;
+  char *p;
+  char *r;
+
+  r = NULL;
+  p = page.buffer;
+  for (i = 0, n = strstr (p, CAST_NAME_PATTERN);
+       i < XBUFMAX && n && *n;
+       ++i, n = strstr (p, CAST_NAME_PATTERN))
+  {
+    series.cast.total_persons++;
+    init_person (&series.cast.person[i]);
+    for (n += n_cast_name_pattern; *n != '>'; ++n)
+      ;
+    if (*n == '>')
+      n++;
+    for (p = series.cast.person[i].name; *n != '<'; ++p, ++n)
+    {
+      while (is_entity_ref (n))
+        *p++ = entity_ref_char (&n);
+      *p = *n;
+    }
+    *p = '\0';
+    r = strstr (n, CAST_ROLE_PATTERN);
+    if (r && *r)
+    {
+      r += n_cast_role_pattern;
+      for (p = series.cast.person[i].role; *r != '<'; ++r, ++p)
+      {
+        while (is_entity_ref (r))
+          *p++ = entity_ref_char (&r);
+        *p = *r;
+      }
+      *p = '\0';
+      p = r;
+    }
+  }
+}
+
+static void
 set_series_start_end_airs (void)
 {
-  memcpy (series->air_start,
+  memcpy (series.air_start,
           EPISODE (SEASON (0), 0).air,
           strlen (EPISODE (SEASON (0), 0).air) + 1);
 
-  memcpy (series->air_end,
+  memcpy (series.air_end,
           LAST_EPISODE_OF (LAST_SEASON).air,
           strlen (LAST_EPISODE_OF (LAST_SEASON).air) + 1);
 }
@@ -1274,8 +1449,8 @@ set_series_total_episodes (void)
 {
   int s;
 
-  for (s = 0; s < series->total_seasons; ++s)
-    series->total_episodes += SEASON (s).total_episodes;
+  for (s = 0; s < series.total_seasons; ++s)
+    series.total_episodes += SEASON (s).total_episodes;
 }
 
 static void
@@ -1289,7 +1464,7 @@ set_series_rating (void)
   total = 0;
   x = 0.0f;
 
-  for (s = 0; s < series->total_seasons; ++s)
+  for (s = 0; s < series.total_seasons; ++s)
   {
     if (SEASON (s).rating >= 0.0f)
     {
@@ -1297,38 +1472,109 @@ set_series_rating (void)
       x += SEASON (s).rating;
     }
   }
-  series->rating = x / total;
+  series.rating = x / total;
 }
 
 static void
 retrieve_series (const struct tvi_options *x)
 {
   search_url (search);
-  if (try_connect (url_search))
-  {
-    parse_search_page ();
-    episodes_url (e);
-    if (try_connect (url_e))
-    {
-      parse_episodes_page ();
-      int i;
-      for (i = 0; i < series->total_seasons; ++i)
-      {
-        season_url (s, i + 1);
-        if (try_connect (url_s))
-          parse_season_page (&SEASON (i));
-        else
-          die (E_INTERNET, "failed to connect to \"%s\"", url_s);
-      }
-      set_series_start_end_airs ();
-      set_series_total_episodes ();
-      set_series_rating ();
-    }
-    else
-      die (E_INTERNET, "failed to connect to \"%s\"", url_e);
-  }
-  else
+
+  if (!try_connect (url_search))
     die (E_INTERNET, "failed to connect to \"%s\"", url_search);
+
+  parse_search_page ();
+
+  episodes_url (episodes);
+  if (!try_connect (url_episodes))
+    die (E_INTERNET, "failed to connect to \"%s\"", url_episodes);
+
+  parse_episodes_page ();
+
+  if (x->cast)
+  {
+    cast_url (cast);
+    if (!try_connect (url_cast))
+      die (E_INTERNET, "failed to connect to \"%s\"", url_cast);
+    parse_cast_page ();
+    return;
+  }
+
+  int i;
+
+  for (i = 0; i < series.total_seasons; ++i)
+  {
+    season_url (season, i + 1);
+    if (!try_connect (url_season))
+      die (E_INTERNET, "failed to connect to \"%s\"", url_season);
+    parse_season_page (&SEASON (i));
+  }
+
+  set_series_start_end_airs ();
+  set_series_total_episodes ();
+  set_series_rating ();
+}
+
+static void
+display_description (const char *desc)
+{
+  int i;
+  int n;
+  int s;
+  int stop;
+  size_t n_word;
+  char *w;
+  const char *p;
+
+  n = 0;
+  stop = console_width () - DESCRIPTION_INDENT_SIZE;
+
+#define __put_c(__c) \
+  do \
+  { \
+    fputc (__c, stdout); \
+    n++; \
+  } while (0)
+
+#define __put_w(__w) \
+  do \
+  { \
+    for (w = __w; *w; ++w) \
+      __put_c (*w); \
+  } while (0)
+
+#define __indent(__n) \
+  do \
+  { \
+    n = 0; \
+    s = DESCRIPTION_INDENT_SIZE * (__n); \
+    for (i = 0; i < s; ++i) \
+      __put_c (' '); \
+  } while (0)
+
+  __indent (2);
+  for (p = desc; *p;)
+  {
+    while (isspace (*p))
+      p++;
+    char word[XBUFMAX];
+    for (w = word; *p && !isspace (*p); ++p, ++w)
+      *w = *p;
+    *w = '\0';
+    n_word = strlen (word);
+    if (n + n_word >= stop)
+    {
+      fputc ('\n', stdout);
+      __indent (1);
+    }
+    __put_w (word);
+    __put_c (*p);
+  }
+  fputc ('\n', stdout);
+
+#undef __put_c
+#undef __put_w
+#undef __indent
 }
 
 static void
@@ -1336,32 +1582,84 @@ display_episode (int s, int e, const struct tvi_options *x)
 {
   struct episode *episode = &EPISODE (SEASON (s), e);
 
-  printf ("Season %02i Episode %02i: %s", s + 1, e + 1, episode->title);
+  printf ("Season %i Episode %i: %s\n", s + 1, e + 1, episode->title);
 
   if (x->episode_attrs & E_ATTR_RATING)
   {
+    fputs ("  Rating:      ", stdout);
     if (episode->has_aired)
-      printf (" - %.1f", episode->rating);
+      printf ("%.1f", episode->rating);
     else
-      fputs (" - not rated", stdout);
+      fputs ("not rated", stdout);
+    fputc ('\n', stdout);
   }
 
   if (x->episode_attrs & E_ATTR_AIR)
   {
-    if (x->episode_attrs & E_ATTR_RATING)
-      fputs (" -", stdout);
-    fputc (' ', stdout);
-    if (episode->has_aired)
-      fputs ("AIRED ", stdout);
-    else
-      fputs ("AIRS ", stdout);
-    fputs (episode->air, stdout);
+    printf ("  Air Date:    %s", episode->air);
+    if (!episode->has_aired)
+      fputs (" (not yet aired)", stdout);
+    fputc ('\n', stdout);
   }
 
-  fputc('\n', stdout);
-
   if (x->episode_attrs & E_ATTR_DESCRIPTION)
-    printf ("    %s\n\n", episode->description);
+  {
+    fputs ("  Description:", stdout);
+    if (strcmp (episode->description, EMPTY_DESCRIPTION) == 0)
+      printf (" %s", episode->description);
+    else
+    {
+      fputc ('\n', stdout);
+      display_description (episode->description);
+    }
+    fputc ('\n', stdout);
+  }
+}
+
+static void
+init_query (struct query *query, const char *s)
+{
+  int pos;
+  char *t;
+
+  query->total_tokens = 0;
+  for (pos = 0; *s; ++pos, ++query->total_tokens)
+  {
+    while (*s == ' ')
+      s++;
+    for (t = query->token[pos].str; *s && *s != ' '; ++t, ++s)
+      *t = tolower (*s);
+    *t = '\0';
+    query->token[pos].n = strlen (query->token[pos].str);
+  }
+}
+
+static bool
+person_compare (const struct person *person, const struct query *query)
+{
+  int i;
+  size_t nn;
+  size_t nr;
+  char *l;
+  const char *s;
+
+  for (i = 0; i < query->total_tokens; ++i)
+  {
+    nn = strlen (person->name);
+    nr = strlen (person->role);
+    char lname[nn + 1];
+    for (l = lname, s = person->name; *s; ++l, ++s)
+      *l = tolower (*s);
+    *l = '\0';
+    char lrole[nr + 1];
+    for (l = lrole, s = person->role; *s; ++l, ++s)
+      *l = tolower (*s);
+    *l = '\0';
+    if (strstr (lname, query->token[i].str) ||
+        strstr (lrole, query->token[i].str))
+      return true;
+  }
+  return false;
 }
 
 static void
@@ -1375,13 +1673,43 @@ display_series (const struct tvi_options *x)
   if (x->info)
   {
     printf ("%s (%i seasons, %i episodes) %s - %s\n",
-            TITLE, series->total_seasons, series->total_episodes,
-            series->air_start, series->air_end);
-    printf ("Airs %s\n", series->airs_on);
-      for (s = 0; s < series->total_seasons; ++s)
-        printf ("Season %i rating: %.1f\n", s + 1, SEASON (s).rating);
-    printf ("Series overall rating: %.1f\n", series->rating);
-    printf ("    %s\n", series->description);
+            TITLE, series.total_seasons, series.total_episodes,
+            series.air_start, series.air_end);
+    if (series.schedule.ended)
+      printf ("Ended in %s on %s\n",
+              series.schedule.time, series.schedule.network);
+    else
+      printf ("Airs %ss at %s on %s\n",
+              series.schedule.day,
+              series.schedule.time,
+              series.schedule.network);
+    for (s = 0; s < series.total_seasons; ++s)
+      printf ("Season %i rating: %.1f\n", s + 1, SEASON (s).rating);
+    printf ("Series overall rating: %.1f\n", series.rating);
+    display_description (series.description);
+    return;
+  }
+
+  if (x->cast)
+  {
+    if (*x->cast_req)
+    {
+      struct query query;
+      init_query (&query, x->cast_req);
+      printf ("%s cast and crew [matching \"%s\"] (NAME -> ROLE):\n",
+              TITLE, x->cast_req);
+      for (i = 0; i < series.cast.total_persons; ++i)
+        if (person_compare (&series.cast.person[i], &query))
+          printf ("  %s -> %s\n",
+                  series.cast.person[i].name, series.cast.person[i].role);
+    }
+    else
+    {
+      printf ("%s cast and crew (NAME -> ROLE):\n", TITLE);
+      for (i = 0; i < series.cast.total_persons; ++i)
+        printf ("  %s -> %s\n",
+                series.cast.person[i].name, series.cast.person[i].role);
+    }
     return;
   }
 
@@ -1415,7 +1743,7 @@ display_series (const struct tvi_options *x)
      episodes specified: no */
   if (x->s.n == 0 && x->e.n == 0)
   {
-    for (s = 0; s < series->total_seasons; ++s)
+    for (s = 0; s < series.total_seasons; ++s)
       for (e = 0; e < SEASON (s).total_episodes; ++e)
         display_episode (s, e, x);
     return;
@@ -1436,7 +1764,7 @@ display_series (const struct tvi_options *x)
   if (x->s.n == 0 && x->e.n > 0)
   {
     for (i = 0; i < x->e.n; ++i)
-      for (s = 0, j = 0; s < series->total_seasons; ++s)
+      for (s = 0, j = 0; s < series.total_seasons; ++s)
         for (e = 0; e < SEASON (s).total_episodes; ++e, ++j)
           if (x->e.v[i] == j + 1 || x->e.v[i] == e + 1)
             display_episode (s, e, x);
@@ -1457,6 +1785,41 @@ display_series (const struct tvi_options *x)
 static void
 verify_options (const struct tvi_options *x)
 {
+  if (x->cast)
+  {
+    if (x->episode_attrs & E_ATTR_AIR)
+      xerror (0, "options --cast and --air are mutually exclusive");
+    if (x->episode_attrs & E_ATTR_DESCRIPTION)
+      xerror (0, "options --cast and --desc are mutually exclusive");
+    if (x->episode_attrs & E_ATTR_RATING)
+      xerror (0, "options --cast and --rating are mutually exclusive");
+    if (x->info)
+      xerror (0, "options --cast and --info are mutually exclusive");
+    if (x->last)
+      xerror (0, "options --cast and --last are mutually exclusive");
+    if (x->highest_rated)
+      xerror (0, "options --cast and --highest-rated are mutually exclusive");
+    if (x->lowest_rated)
+      xerror (0, "options --cast and --lowest-rated are mutually exclusive");
+    if (x->next)
+      xerror (0, "options --cast and --next are mutually exclusive");
+    if (x->s.n > 0)
+      xerror (0, "options --cast and --season are mutually exclusive");
+    if (x->e.n > 0)
+      xerror (0, "options --cast and --episode are mutually exclusive");
+    if (x->episode_attrs & E_ATTR_AIR ||
+        x->episode_attrs & E_ATTR_DESCRIPTION ||
+        x->episode_attrs & E_ATTR_RATING ||
+        x->info ||
+        x->last ||
+        x->highest_rated ||
+        x->lowest_rated ||
+        x->next ||
+        x->s.n > 0 ||
+        x->e.n > 0)
+      usage (true);
+  }
+
   if (x->highest_rated)
   {
     if (x->info)
@@ -1549,7 +1912,7 @@ find_last_to_air_episode (int *season_no, int *episode_no)
   int e;
   int s;
 
-  if (series->total_seasons == 0)
+  if (series.total_seasons == 0)
   {
     *season_no = -1;
     *episode_no = -1;
@@ -1558,12 +1921,12 @@ find_last_to_air_episode (int *season_no, int *episode_no)
 
   if (LAST_EPISODE_OF (LAST_SEASON).has_aired)
   {
-    *season_no = series->total_seasons - 1;
-    *episode_no = SEASON (series->total_seasons - 1).total_episodes - 1;
+    *season_no = series.total_seasons - 1;
+    *episode_no = SEASON (series.total_seasons - 1).total_episodes - 1;
     return;
   }
 
-  for (s = 0; s < series->total_seasons; ++s)
+  for (s = 0; s < series.total_seasons; ++s)
   {
     e = SEASON (s).total_episodes - 1;
     if (!EPISODE (SEASON (s), e).has_aired)
@@ -1590,7 +1953,7 @@ find_next_to_air_episode (int *season_no, int *episode_no)
   find_last_to_air_episode (&s, &e);
 
   if ((s == -1 && e == -1) ||
-      (s == series->total_seasons - 1 &&
+      (s == series.total_seasons - 1 &&
        e == LAST_SEASON.total_episodes - 1))
   {
     *season_no = -1;
@@ -1605,7 +1968,7 @@ find_next_to_air_episode (int *season_no, int *episode_no)
   }
   else
   {
-    if (s < series->total_seasons)
+    if (s < series.total_seasons)
     {
       *season_no = s + 1;
       *episode_no = 0;
@@ -1629,7 +1992,7 @@ find_highest_rated_episode (int *sa, int *ea)
   double r;
 
   r = 0.0f;
-  for (s = 0; s < series->total_seasons; ++s)
+  for (s = 0; s < series.total_seasons; ++s)
   {
     for (e = 0; e < SEASON (s).total_episodes; ++e)
     {
@@ -1646,7 +2009,7 @@ find_highest_rated_episode (int *sa, int *ea)
   }
 
   p = 1;
-  for (s = 0; s < series->total_seasons; ++s)
+  for (s = 0; s < series.total_seasons; ++s)
   {
     for (e = 0; e < SEASON (s).total_episodes; ++e)
     {
@@ -1685,7 +2048,7 @@ find_lowest_rated_episode (int *sa, int *ea)
   double r;
 
   r = DBL_MAX;
-  for (s = 0; s < series->total_seasons; ++s)
+  for (s = 0; s < series.total_seasons; ++s)
   {
     for (e = 0; e < SEASON (s).total_episodes; ++e)
     {
@@ -1701,7 +2064,7 @@ find_lowest_rated_episode (int *sa, int *ea)
     }
   }
 
-  for (s = 0; s < series->total_seasons; ++s)
+  for (s = 0; s < series.total_seasons; ++s)
   {
     for (e = 0; e < SEASON (s).total_episodes; ++e)
     {
@@ -1776,7 +2139,7 @@ verify_options_with_series (struct tvi_options *x)
     had_error = false;
     for (e = 0; e < x->e.n; ++e)
     {
-      if (x->e.v[e] <= 0 || x->e.v[e] > series->total_episodes)
+      if (x->e.v[e] <= 0 || x->e.v[e] > series.total_episodes)
       {
         xerror (0, "invalid episode specified -- %i", x->e.v[e]);
         had_error = true;
@@ -1785,8 +2148,8 @@ verify_options_with_series (struct tvi_options *x)
     if (had_error)
     {
       xerror (0, "\"%s\" has a total of %i episodes",
-              TITLE, series->total_episodes);
-      die (E_OPTION, "specify a value between 1-%i", series->total_episodes);
+              TITLE, series.total_episodes);
+      die (E_OPTION, "specify a value between 1-%i", series.total_episodes);
     }
   }
 
@@ -1795,7 +2158,7 @@ verify_options_with_series (struct tvi_options *x)
     had_error = false;
     for (s = 0; s < x->s.n; ++s)
     {
-      if (x->s.v[s] <= 0 || x->s.v[s] > series->total_seasons)
+      if (x->s.v[s] <= 0 || x->s.v[s] > series.total_seasons)
       {
         xerror (0, "invalid season specified -- %i", x->s.v[s]);
         had_error = true;
@@ -1804,8 +2167,8 @@ verify_options_with_series (struct tvi_options *x)
     if (had_error)
     {
       xerror (0, "\"%s\" has a total of %i seasons",
-              TITLE, series->total_seasons);
-      die (E_OPTION, "specify a value between 1-%i", series->total_seasons);
+              TITLE, series.total_seasons);
+      die (E_OPTION, "specify a value between 1-%i", series.total_seasons);
     }
   }
 
@@ -1843,6 +2206,8 @@ verify_options_with_series (struct tvi_options *x)
 static void
 init_tvi_options (struct tvi_options *x)
 {
+  x->cast = false;
+  x->cast_req[0] = '\0';
   x->highest_rated = false;
   x->info = false;
   x->last = false;
@@ -1860,15 +2225,12 @@ cleanup (void)
   int s;
 
   xfree (page.buffer);
-  if (series)
-  {
-    xfree (series->title.given);
-    xfree (series->description);
-    for (s = 0; s < series->total_seasons; ++s)
-      for (e = 0; e < SEASON (s).total_episodes; ++e)
-        xfree (EPISODE (SEASON (s), e).description);
-  }
-  xfree (series);
+  xfree (series.title.given);
+  xfree (series.description);
+
+  for (s = 0; s < series.total_seasons; ++s)
+    for (e = 0; e < SEASON (s).total_episodes; ++e)
+      xfree (EPISODE (SEASON (s), e).description);
 }
 
 int
@@ -1883,13 +2245,18 @@ main (int argc, char **argv)
 
   for (;;)
   {
-    c = getopt_long (argc, argv, "ade:hHlLnirs:v", options, NULL);
+    c = getopt_long (argc, argv, "ac::de:hHlLnirs:v", options, NULL);
     if (c == -1)
       break;
     switch (c)
     {
       case 'a':
         x.episode_attrs |= E_ATTR_AIR;
+        break;
+      case 'c':
+        x.cast = true;
+        if (optarg)
+          memcpy (x.cast_req, optarg, strlen (optarg) + 1);
         break;
       case 'd':
         x.episode_attrs |= E_ATTR_DESCRIPTION;
@@ -1947,6 +2314,7 @@ main (int argc, char **argv)
   verify_options (&x);
   init_series ();
   set_series_given_title (argv + optind);
+  set_pattern_sizes ();
   retrieve_series (&x);
   verify_options_with_series (&x);
   display_series (&x);

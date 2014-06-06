@@ -6,28 +6,34 @@ All TV series data is obtained from [TV.com](http://www.tv.com/).
 
 Usage
 -----
-    Usage: tvi [-adHilLnr] [-sN[,N,...]] [-eN[,N,...]] TITLE
+    Usage: tvi [-adHilLnr] [-c[NAME]] [-sN[,N,...]] [-eN[,N,...]] TITLE
 
 Options
 -------
-    -e N, --episode=N     specify episode(s) N
-                          more than 1 episode can be specified in a
-                          comma-separated list: N1,N2,N3,...
-    -s N, --season=N      specify season(s) N
-                          more than 1 season can be specified in a
-                          comma-separated list: N1,N2,N3,...
-    -a, --air             print air date for each episode
-    -d, --description     print description for each episode
-    -H, --highest-rated   print highest rated episode of series
-    -l, --last            print most recently aired episode
-    -L, --lowest-rated    print lowest rated episode of series
-    -n, --next            print the next upcoming episode scheduled to air
-    -r, --rating          print rating for each episode
-    -i, --info            print general info about TITLE
-    -h, --help            print this text and exit
-    -v, --version         print version information and exit
+    -eN, --episode=N          specify episode(s) N
+                              For more than one episode, use a
+                              comma-separated list (e.g. "1,2,3").
+    -sN, --season=N           specify season(s) N
+                              For more than one season, use a
+                              comma-separated list (e.g. "1,2,3").
+    -a, --air                 print the air date for each episode
+    -cNAME, --cast=NAME       print cast and crew members
+                              If NAME is given, and it matches a cast
+                              member's name, their respective role is
+                              printed. On the other hand if NAME matches
+                              a cast member's role, their respective
+                              name is printed. If NAME is not given, all
+                              cast and crew members are printed.
+    -d, --description         print description for each episode
+    -H, --highest-rated       print highest rated episode of series
+    -l, --last                print the most recently aired episode
+    -L, --lowest-rated        print lowest rated episode of series
+    -n, --next                print the next upcoming episode scheduled to air
+    -r, --rating              print rating for each episode
+    -h, --help                print this text and exit
+    -v, --version             print version information and exit
 
-No more than 1 TITLE argument may be provided.
+Only one TITLE can be provided at a time.
 
 Building
 --------
