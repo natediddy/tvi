@@ -46,7 +46,7 @@
 #ifdef PACKAGE_VERSION
 # define PROGRAM_VERSION PACKAGE_VERSION
 #else
-# define PROGRAM_VERSION "3.2.0"
+# define PROGRAM_VERSION "3.3.0"
 #endif
 
 #define TVDOTCOM "http://www.tv.com"
@@ -122,11 +122,12 @@
 
 #define ENCODE_CHARS "!@#$%^&*()=+{}[]|\\;':\",<>/? "
 
-#define TITLE              series.title.proper
-#define SEASON(n)          series.season[(n)]
-#define LAST_SEASON        SEASON (series.total_seasons - 1)
-#define EPISODE(s, n)      s.episode[(n)]
-#define LAST_EPISODE_OF(s) s.episode[s.total_episodes - 1]
+#define TITLE               series.title.proper
+#define SEASON(n)           series.season[(n)]
+#define LAST_SEASON         SEASON (series.total_seasons - 1)
+#define EPISODE(s, n)       s.episode[(n)]
+#define FIRST_EPISODE_OF(s) s.episode[0]
+#define LAST_EPISODE_OF(s)  s.episode[s.total_episodes - 1]
 
 #define PROPELLER_ROTATE_INTERVAL 0.25f
 #define propeller_rotate_interval_passed(m) \
@@ -308,10 +309,10 @@ struct query
   struct token token[XBUFMAX];
 };
 
-#define E_ATTR_0           0
-#define E_ATTR_AIR         0x01
-#define E_ATTR_DESCRIPTION 0x02
-#define E_ATTR_RATING      0x04
+#define ATTR_0           0
+#define ATTR_AIR         0x01
+#define ATTR_DESCRIPTION 0x02
+#define ATTR_RATING      0x04
 
 struct tvi_options
 {
@@ -321,7 +322,7 @@ struct tvi_options
   bool last;
   bool lowest_rated;
   bool next;
-  char episode_attrs;
+  char attrs;
   struct spec e;
   struct spec s;
   char cast_req[XBUFMAX];
@@ -1584,7 +1585,7 @@ display_episode (int s, int e, const struct tvi_options *x)
 
   printf ("Season %i Episode %i: %s\n", s + 1, e + 1, episode->title);
 
-  if (x->episode_attrs & E_ATTR_RATING)
+  if (x->attrs & ATTR_RATING)
   {
     fputs ("  Rating:      ", stdout);
     if (episode->has_aired)
@@ -1594,7 +1595,7 @@ display_episode (int s, int e, const struct tvi_options *x)
     fputc ('\n', stdout);
   }
 
-  if (x->episode_attrs & E_ATTR_AIR)
+  if (x->attrs & ATTR_AIR)
   {
     printf ("  Air Date:    %s", episode->air);
     if (!episode->has_aired)
@@ -1602,7 +1603,7 @@ display_episode (int s, int e, const struct tvi_options *x)
     fputc ('\n', stdout);
   }
 
-  if (x->episode_attrs & E_ATTR_DESCRIPTION)
+  if (x->attrs & ATTR_DESCRIPTION)
   {
     fputs ("  Description:", stdout);
     if (strcmp (episode->description, EMPTY_DESCRIPTION) == 0)
@@ -1660,6 +1661,21 @@ person_compare (const struct person *person, const struct query *query)
       return true;
   }
   return false;
+}
+
+static int
+attributes_set (char attrs)
+{
+  int n;
+
+  n = 0;
+  if (attrs & ATTR_AIR)
+    n++;
+  if (attrs & ATTR_RATING)
+    n++;
+  if (attrs & ATTR_DESCRIPTION)
+    n++;
+  return n;
 }
 
 static void
@@ -1739,6 +1755,60 @@ display_series (const struct tvi_options *x)
     }
   }
 
+  if (x->attrs != ATTR_0 && x->e.n == 0)
+  {
+    int n_attrs = attributes_set (x->attrs);
+    if (x->s.n == 0)
+    {
+      if (n_attrs > 1)
+        printf ("%s:\n", TITLE);
+      if (x->attrs & ATTR_AIR)
+        printf ("%s%s - %s\n",
+                (n_attrs > 1) ? "  Air dates:   " : "",
+                series.air_start,
+                series.air_end);
+      if (x->attrs & ATTR_RATING)
+        printf ("%s%.1f\n",
+                (n_attrs > 1) ? "  Rating:      " : "", series.rating);
+      if (x->attrs & ATTR_DESCRIPTION)
+      {
+        printf ("%s", (n_attrs > 1) ? "  Description:" : "");
+        if (strcmp (series.description, EMPTY_DESCRIPTION) == 0)
+          printf ("%s%s\n", (n_attrs > 1) ? " " : "", series.description);
+        else
+        {
+          if (n_attrs > 1)
+            fputc ('\n', stdout);
+          display_description (series.description);
+        }
+      }
+    }
+    else
+    {
+      for (i = 0; i < x->s.n; ++i)
+      {
+        if (x->s.n > 1)
+          printf ("Season %i:\n", x->s.v[i]);
+        if (x->attrs & ATTR_AIR)
+          printf ("%s%s%s - %s\n",
+                  (x->s.n > 1) ? "  " : "",
+                  (n_attrs > 1) ? "Air dates:   " : "",
+                  FIRST_EPISODE_OF (SEASON (x->s.v[i] - 1)).air,
+                  LAST_EPISODE_OF (SEASON (x->s.v[i] - 1)).air);
+        if (x->attrs & ATTR_RATING)
+          printf ("%s%s%.1f\n",
+                  (x->s.n > 1) ? "  " : "",
+                  (n_attrs > 1) ? "Rating:      " : "",
+                  SEASON (x->s.v[i] - 1).rating);
+        if (x->attrs & ATTR_DESCRIPTION)
+          printf ("%s%s(no description for seasons)\n",
+                  (x->s.n > 1) ? "  " : "",
+                  (n_attrs > 1) ? "Description: " : "");
+      }
+    }
+    return;
+  }
+
   /* seasons specified: no
      episodes specified: no */
   if (x->s.n == 0 && x->e.n == 0)
@@ -1787,11 +1857,11 @@ verify_options (const struct tvi_options *x)
 {
   if (x->cast)
   {
-    if (x->episode_attrs & E_ATTR_AIR)
+    if (x->attrs & ATTR_AIR)
       xerror (0, "options --cast and --air are mutually exclusive");
-    if (x->episode_attrs & E_ATTR_DESCRIPTION)
+    if (x->attrs & ATTR_DESCRIPTION)
       xerror (0, "options --cast and --desc are mutually exclusive");
-    if (x->episode_attrs & E_ATTR_RATING)
+    if (x->attrs & ATTR_RATING)
       xerror (0, "options --cast and --rating are mutually exclusive");
     if (x->info)
       xerror (0, "options --cast and --info are mutually exclusive");
@@ -1807,9 +1877,9 @@ verify_options (const struct tvi_options *x)
       xerror (0, "options --cast and --season are mutually exclusive");
     if (x->e.n > 0)
       xerror (0, "options --cast and --episode are mutually exclusive");
-    if (x->episode_attrs & E_ATTR_AIR ||
-        x->episode_attrs & E_ATTR_DESCRIPTION ||
-        x->episode_attrs & E_ATTR_RATING ||
+    if (x->attrs & ATTR_AIR ||
+        x->attrs & ATTR_DESCRIPTION ||
+        x->attrs & ATTR_RATING ||
         x->info ||
         x->last ||
         x->highest_rated ||
@@ -1862,24 +1932,15 @@ verify_options (const struct tvi_options *x)
 
   if (x->info)
   {
-    if (x->episode_attrs & E_ATTR_AIR)
-      xerror (0, "options --info and --air are mutually exclusive");
-    if (x->episode_attrs & E_ATTR_DESCRIPTION)
-      xerror (0, "options --info and --desc are mutually exclusive");
     if (x->last)
       xerror (0, "options --info and --last are mutually exclusive");
     if (x->next)
       xerror (0, "options --info and --next are mutually exclusive");
-    if (x->episode_attrs & E_ATTR_RATING)
-      xerror (0, "options --info and --rating are mutually exclusive");
     if (x->s.n > 0)
       xerror (0, "options --info and --season are mutually exclusive");
     if (x->e.n > 0)
       xerror (0, "options --info and --episode are mutually exclusive");
-    if (x->episode_attrs & E_ATTR_AIR ||
-        x->episode_attrs & E_ATTR_DESCRIPTION || x->last ||
-        x->next || x->episode_attrs & E_ATTR_RATING ||
-        x->s.n > 0 || x->e.n > 0)
+    if (x->last || x->next || x->s.n > 0 || x->e.n > 0)
       usage (true);
   }
 
@@ -2111,7 +2172,7 @@ verify_options_with_series (struct tvi_options *x)
       spec_append (&x->s, sa[s] + 1);
     for (e = 0; ea[e] != -1; ++e)
       spec_append (&x->e, ea[e] + 1);
-    x->episode_attrs |= E_ATTR_AIR | E_ATTR_DESCRIPTION | E_ATTR_RATING;
+    x->attrs |= ATTR_AIR | ATTR_DESCRIPTION | ATTR_RATING;
     return;
   }
 
@@ -2128,9 +2189,9 @@ verify_options_with_series (struct tvi_options *x)
     }
     spec_append (&x->s, s);
     spec_append (&x->e, e);
-    x->episode_attrs |= E_ATTR_AIR | E_ATTR_DESCRIPTION;
+    x->attrs |= ATTR_AIR | ATTR_DESCRIPTION;
     if (x->last)
-      x->episode_attrs |= E_ATTR_RATING;
+      x->attrs |= ATTR_RATING;
     return;
   }
 
@@ -2213,7 +2274,7 @@ init_tvi_options (struct tvi_options *x)
   x->last = false;
   x->lowest_rated = false;
   x->next = false;
-  x->episode_attrs = E_ATTR_0;
+  x->attrs = ATTR_0;
   x->e.n = 0;
   x->s.n = 0;
 }
@@ -2251,7 +2312,7 @@ main (int argc, char **argv)
     switch (c)
     {
       case 'a':
-        x.episode_attrs |= E_ATTR_AIR;
+        x.attrs |= ATTR_AIR;
         break;
       case 'c':
         x.cast = true;
@@ -2259,7 +2320,7 @@ main (int argc, char **argv)
           memcpy (x.cast_req, optarg, strlen (optarg) + 1);
         break;
       case 'd':
-        x.episode_attrs |= E_ATTR_DESCRIPTION;
+        x.attrs |= ATTR_DESCRIPTION;
         break;
       case 'e':
         if (!spec_parse_from_optarg (&x.e, optarg))
@@ -2269,7 +2330,7 @@ main (int argc, char **argv)
         }
         break;
       case 'h':
-        usage(false);
+        usage (false);
         break;
       case 'H':
         x.highest_rated = true;
@@ -2287,7 +2348,7 @@ main (int argc, char **argv)
         x.next = true;
         break;
       case 'r':
-        x.episode_attrs |= E_ATTR_RATING;
+        x.attrs |= ATTR_RATING;
         break;
       case 's':
         if (!spec_parse_from_optarg (&x.s, optarg))
