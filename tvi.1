@@ -3,23 +3,30 @@
 tvi \- display information about a television series
 .SH SYNOPSIS
 .B tvi
-[\-\fBadHilLnr\fR] [\-\fBs\fR\fIN\fR[,\fIN\fR,...]] [\-\fBe\fR\fIN\fR[,\fIN\fR,...]] \fITITLE\fR
+[\-\fBadHilLnr\fR] [\-\fBc\fR[\fINAME\fR]] [\-\fBs\fR\fIN\fR[,\fIN\fR,...]] [\-\fBe\fR\fIN\fR[,\fIN\fR,...]] \fITITLE\fR
 .SH DESCRIPTION
 .PP
 Retrieve episode information about a TV series.
-.PP
-Mandatory arguments to long options are mandatory for short options too.
 .TP
-\fB\-s\fR, \fB\-\-season\fR=\fIN\fR
+\fB\-s\fR\fIN\fR, \fB\-\-season\fR=\fIN\fR
 specify season(s) \fIN\fR of \fITITLE\fR
-more than 1 season can be specified in a comma-separated list: \fIN1\fR,\fIN2\fR,\fIN3\fR,...
+
+More than 1 season can be specified in a comma-separated list: \fIN1\fR,\fIN2\fR,\fIN3\fR,...
 .TP
-\fB\-e\fR, \fB\-\-episode\fR=\fIN\fR
+\fB\-e\fR\fIN\fR, \fB\-\-episode\fR=\fIN\fR
 specify episode(s) \fIN\fR of \fITITLE\fR
-more than 1 episode can be specified in a comma-separated list: \fIN1\fR,\fIN2\fR,\fIN3\fR,...
+
+More than 1 episode can be specified in a comma-separated list: \fIN1\fR,\fIN2\fR,\fIN3\fR,...
 .TP
 \fB\-a\fR, \fB\-\-air\fR
 print air date for each episode
+.TP
+\fB\-c\fR\fINAME\fR, \fB\-\-cast\fR=\fINAME\fR
+print cast and crew members
+
+If \fINAME\fR is given and it matches a cast or crew member's name, then their respective role is printed.
+If \fINAME\fR is given and it matches a cast or crew member's role, then their respective name is printed.
+If \fINAME\fR is not given, all cast and crew members are printed.
 .TP
 \fB\-d\fR, \fB\-\-description\fR
 print description for each episode
@@ -71,29 +78,64 @@ season 2 episode 12 of \fIThe Wire\fR:
 Print rating of season 5 episode 14 of AMC's \fIBreaking Bad\fR:
 
     tvi -r -s5 -e16 breaking bad
+    tvi --rating --season=5 --episode=16
 
 Print general info about HBO's \fIGame of Thrones\fR:
 
+    tvi -i game of thrones
     tvi --info game of thrones
 
 Print and ratings for episodes 5, 6 and 7 from season 4 of AMC's
 \fIMad Men\fR:
 
     tvi -r -s4 -e5,6,7 mad men
+    tvi --rating --season=4 --episode=5,6,7
 
 Print and descriptions for episode 1 of seasons 1, 2 and 3 of Showtime's
 \fIHomeland\fR:
 
     tvi -d -s1,2,3 -e1 homeland
+    tvi --description --season=1,2,3 --episode=1 homeland
 
 Print information about all-time highest rated episode(s) for HBO's
 \fIThe Sopranos\fR:
 
     tvi -H the sopranos
+    tvi --highest-rated the sopranos
 
-Print information about all-time lowest rated episode(s) for \fIThe Sopranos\fR:
+Print information about all-time lowest rated episode(s) for
+\fIThe Sopranos\fR:
 
     tvi -L the sopranos
+    tvi --lowest-rated the sopranos
+
+Print information about the most recently aired episode of
+\fIGame of Thrones\fR:
+
+    tvi -l game of thrones
+    tvi --last game of thrones
+
+Print information about the next upcoming episode of
+\fIGame of Thrones\fR:
+
+    tvi -n game of thrones
+    tvi --next game of thrones
+
+Print all cast and crew members of \fIBreaking Bad\fR:
+
+    tvi -c breaking bad
+    tvi --cast breaking bad
+
+Print all cast members of \fIGame of Thrones\fR that play a
+character from the Lannister family:
+
+    tvi -clannister game of thrones
+    tvi --cast=lannister game of thrones
+
+Print the director(s) of \fIGame of Thrones\fR:
+
+    tvi -cdirector game of thrones
+    tvi --cast=director
 
 .SH AUTHOR
 Written by Nathan Forbes.
