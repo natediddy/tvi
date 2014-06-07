@@ -46,7 +46,7 @@
 #ifdef PACKAGE_VERSION
 # define PROGRAM_VERSION PACKAGE_VERSION
 #else
-# define PROGRAM_VERSION "3.3.0"
+# define PROGRAM_VERSION "3.4.0"
 #endif
 
 #define TVDOTCOM "http://www.tv.com"
@@ -69,10 +69,12 @@
   "                            cast and crew members are printed.\n" \
   "  -d, --description         print description for each episode\n" \
   "  -H, --highest-rated       print highest rated episode of series\n" \
-  "  -l, --last                print the most recently aired episode\n" \
+  "  -l, --last                print most recently aired episode\n" \
   "  -L, --lowest-rated        print lowest rated episode of series\n" \
-  "  -n, --next                print the next upcoming episode scheduled " \
-    "to air\n" \
+  "  -n, --next                print next episode scheduled to air\n" \
+  "  -N, --no-progress         do not display any progress while\n" \
+  "                            downloading data (useful for writing\n" \
+  "                            output to a file)\n" \
   "  -r, --rating              print rating for each episode\n" \
   "  -h, --help                print this text and exit\n" \
   "  -v, --version             print version information and exit\n" \
@@ -94,6 +96,11 @@
 #define PROPELLER_SIZE          4
 #define FALLBACK_CONSOLE_WIDTH 40
 #define MILLIS_PER_SECOND    1000
+
+#define ATTR_0           0
+#define ATTR_AIR         0x01
+#define ATTR_DESCRIPTION 0x02
+#define ATTR_RATING      0x04
 
 #define SERIES_TITLE_PATTERN        "<title>"
 #define SERIES_DESCRIPTION_PATTERN  "\"og:description\" content=\""
@@ -309,11 +316,6 @@ struct query
   struct token token[XBUFMAX];
 };
 
-#define ATTR_0           0
-#define ATTR_AIR         0x01
-#define ATTR_DESCRIPTION 0x02
-#define ATTR_RATING      0x04
-
 struct tvi_options
 {
   bool cast;
@@ -322,10 +324,11 @@ struct tvi_options
   bool last;
   bool lowest_rated;
   bool next;
+  bool show_progress;
   char attrs;
+  char cast_req[XBUFMAX];
   struct spec e;
   struct spec s;
-  char cast_req[XBUFMAX];
 };
 
 static const char *program_name;
@@ -355,10 +358,9 @@ static struct option const options[] =
   {"last", no_argument, NULL, 'l'},
   {"lowest-rated", no_argument, NULL, 'L'},
   {"next", no_argument, NULL, 'n'},
+  {"no-progress", no_argument, NULL, 'N'},
   {"rating", no_argument, NULL, 'r'},
-  /*{"reviews", no_argument, NULL, 'R'},*/
   {"season", required_argument, NULL, 's'},
-  /*{"trivia", no_argument, NULL, 't'},*/
   {"version", no_argument, NULL, 'v'},
   {NULL, 0, NULL, 0}
 };
@@ -538,7 +540,7 @@ static void
 usage (bool had_error)
 {
   fprintf ((!had_error) ? stdout : stderr,
-           "Usage: %s [-adHilLnr] [-c[NAME]] [-sN[,N,...]] [-eN[,N,...]] "
+           "Usage: %s [-adHilLnNr] [-c[NAME]] [-sN[,N,...]] [-eN[,N,...]] "
              "TITLE\n",
            program_name);
 
@@ -711,6 +713,11 @@ page_write_cb (void *buf, size_t size, size_t nmemb, void *data)
 static int
 progress_cb (void *data, double dt, double dc, double ut, double uc)
 {
+  const struct tvi_options *x = (const struct tvi_options *) data;
+
+  if (!x->show_progress)
+    return 0;
+
   static const char propeller[PROPELLER_SIZE] = {'-', '\\', '|', '/'};
   static size_t propeller_pos = 0;
   static struct timeval last = {-1, -1};
@@ -777,7 +784,7 @@ check_curl_status (CURL *cp, CURLcode status)
 }
 
 static bool
-try_connect (const char *url)
+try_connect (const char *url, const struct tvi_options *x)
 {
   CURL *cp = curl_easy_init ();
 
@@ -800,6 +807,7 @@ try_connect (const char *url)
   __setopt (CURLOPT_WRITEDATA, &page);
   __setopt (CURLOPT_WRITEFUNCTION, &page_write_cb);
   __setopt (CURLOPT_NOPROGRESS, 0L);
+  __setopt (CURLOPT_PROGRESSDATA, x);
   __setopt (CURLOPT_PROGRESSFUNCTION, &progress_cb);
 #undef __setopt
 
@@ -1481,13 +1489,13 @@ retrieve_series (const struct tvi_options *x)
 {
   search_url (search);
 
-  if (!try_connect (url_search))
+  if (!try_connect (url_search, x))
     die (E_INTERNET, "failed to connect to \"%s\"", url_search);
 
   parse_search_page ();
 
   episodes_url (episodes);
-  if (!try_connect (url_episodes))
+  if (!try_connect (url_episodes, x))
     die (E_INTERNET, "failed to connect to \"%s\"", url_episodes);
 
   parse_episodes_page ();
@@ -1495,7 +1503,7 @@ retrieve_series (const struct tvi_options *x)
   if (x->cast)
   {
     cast_url (cast);
-    if (!try_connect (url_cast))
+    if (!try_connect (url_cast, x))
       die (E_INTERNET, "failed to connect to \"%s\"", url_cast);
     parse_cast_page ();
     return;
@@ -1506,7 +1514,7 @@ retrieve_series (const struct tvi_options *x)
   for (i = 0; i < series.total_seasons; ++i)
   {
     season_url (season, i + 1);
-    if (!try_connect (url_season))
+    if (!try_connect (url_season, x))
       die (E_INTERNET, "failed to connect to \"%s\"", url_season);
     parse_season_page (&SEASON (i));
   }
@@ -2274,6 +2282,7 @@ init_tvi_options (struct tvi_options *x)
   x->last = false;
   x->lowest_rated = false;
   x->next = false;
+  x->show_progress = true;
   x->attrs = ATTR_0;
   x->e.n = 0;
   x->s.n = 0;
@@ -2306,7 +2315,7 @@ main (int argc, char **argv)
 
   for (;;)
   {
-    c = getopt_long (argc, argv, "ac::de:hHlLnirs:v", options, NULL);
+    c = getopt_long (argc, argv, "ac::de:hHlLnNirs:v", options, NULL);
     if (c == -1)
       break;
     switch (c)
@@ -2346,6 +2355,9 @@ main (int argc, char **argv)
         break;
       case 'n':
         x.next = true;
+        break;
+      case 'N':
+        x.show_progress = false;
         break;
       case 'r':
         x.attrs |= ATTR_RATING;

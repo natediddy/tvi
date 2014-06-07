@@ -26,9 +26,12 @@ Options
                               cast and crew members are printed.
     -d, --description         print description for each episode
     -H, --highest-rated       print highest rated episode of series
-    -l, --last                print the most recently aired episode
+    -l, --last                print most recently aired episode
     -L, --lowest-rated        print lowest rated episode of series
-    -n, --next                print the next upcoming episode scheduled to air
+    -n, --next                print next episode scheduled to air
+    -N, --no-progress         do not display any progress while
+                              downloading data (useful for writing
+                              output to a file)
     -r, --rating              print rating for each episode
     -h, --help                print this text and exit
     -v, --version             print version information and exit

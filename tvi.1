@@ -1,9 +1,9 @@
-.TH TVI 1 "May 2014" "3.3.0" "User Commands"
+.TH TVI 1 "May 2014" "3.4.0" "User Commands"
 .SH NAME
 tvi \- display information about a television series
 .SH SYNOPSIS
 .B tvi
-[\-\fBadHilLnr\fR] [\-\fBc\fR[\fINAME\fR]] [\-\fBs\fR\fIN\fR[,\fIN\fR,...]] [\-\fBe\fR\fIN\fR[,\fIN\fR,...]] \fITITLE\fR
+[\-\fBadHilLnNr\fR] [\-\fBc\fR[\fINAME\fR]] [\-\fBs\fR\fIN\fR[,\fIN\fR,...]] [\-\fBe\fR\fIN\fR[,\fIN\fR,...]] \fITITLE\fR
 .SH DESCRIPTION
 .PP
 Retrieve episode information about a TV series.
@@ -45,6 +45,9 @@ print lowest rated episode(s) of \fITITLE\fR
 .TP
 \fB\-n\fR, \fB\-\-next\fR
 print the next upcoming episode scheduled to air
+.TP
+\fB-N\fR, \fB\-\-no-progress\fR
+do not display any progress while downloading data (useful for writing output to a file)
 .TP
 \fB\-r\fR, \fB\-\-rating\fR
 print rating for each episode
