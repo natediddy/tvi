@@ -46,7 +46,7 @@
 #ifdef PACKAGE_VERSION
 # define PROGRAM_VERSION PACKAGE_VERSION
 #else
-# define PROGRAM_VERSION "3.4.0"
+# define PROGRAM_VERSION "3.4.1"
 #endif
 
 #define TVDOTCOM "http://www.tv.com"
@@ -156,6 +156,8 @@
 #define get_millis(start_timeval, end_timeval) \
     (((end_timeval.tv_sec - start_timeval.tv_sec) * MILLIS_PER_SECOND) + \
      ((end_timeval.tv_usec - start_timeval.tv_usec) / MILLIS_PER_SECOND))
+
+#define description_indent_size(width) ((width) * 0.05)
 
 typedef unsigned char bool;
 #define false ((bool) 0)
@@ -1530,13 +1532,16 @@ display_description (const char *desc)
   int i;
   int n;
   int s;
+  int indent_size;
   int stop;
+  int width;
   size_t n_word;
   char *w;
   const char *p;
 
-  n = 0;
-  stop = console_width () - DESCRIPTION_INDENT_SIZE;
+  width = console_width ();
+  indent_size = description_indent_size (width);
+  stop = width - indent_size;
 
 #define __put_c(__c) \
   do \
@@ -1556,7 +1561,7 @@ display_description (const char *desc)
   do \
   { \
     n = 0; \
-    s = DESCRIPTION_INDENT_SIZE * (__n); \
+    s = indent_size * (__n); \
     for (i = 0; i < s; ++i) \
       __put_c (' '); \
   } while (0)
