@@ -1,7 +1,7 @@
 /*
  * tvi - TV series Information
  *
- * Copyright (C) 2013  Nathan Forbes
+ * Copyright (C) 2014  Nathan Forbes
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -17,37 +17,14 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifdef HAVE_CONFIG_H
-# include "config.h"
-#endif
-
-#include <ctype.h>
-#include <errno.h>
 #include <float.h>
 #include <getopt.h>
-#include <limits.h>
-#include <stdarg.h>
-#include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
-#include <sys/ioctl.h>
-#include <sys/time.h>
-#include <time.h>
-#include <unistd.h>
 
 #include <curl/curl.h>
 
-#ifdef PACKAGE_NAME
-# define PROGRAM_NAME PACKAGE_NAME
-#else
-# define PROGRAM_NAME "tvi"
-#endif
-
-#ifdef PACKAGE_VERSION
-# define PROGRAM_VERSION PACKAGE_VERSION
-#else
-# define PROGRAM_VERSION "3.4.1"
-#endif
+#include "tvi.h"
+#include "tvi-util.h"
 
 #define TVDOTCOM "http://www.tv.com"
 
@@ -90,12 +67,7 @@
 #define CAST_URL     TVDOTCOM "/shows/%s/cast/"
 #define SEASON_URL   TVDOTCOM "/shows/%s/season-%u/"
 
-#define USERAGENT PROGRAM_NAME "(TV series Info)/" PROGRAM_VERSION
-
-#define DESCRIPTION_INDENT_SIZE 4
-#define PROPELLER_SIZE          4
-#define FALLBACK_CONSOLE_WIDTH 40
-#define MILLIS_PER_SECOND    1000
+#define PROPELLER_SIZE 4
 
 #define ATTR_0           0
 #define ATTR_AIR         0x01
@@ -115,8 +87,6 @@
 #define SEARCH_HREF_PATTERN         " href=\"/shows/"
 #define CAST_NAME_PATTERN           "<a itemprop=\"name\""
 #define CAST_ROLE_PATTERN           "<div class=\"role\">"
-
-#define XBUFMAX 256
 
 #define EMPTY_DESCRIPTION "(no description)"
 
@@ -140,58 +110,7 @@
 #define propeller_rotate_interval_passed(m) \
   ((m) >= MILLIS_PER_SECOND * PROPELLER_ROTATE_INTERVAL)
 
-#define xnew(type)          ((type *) xmalloc (sizeof (type)))
-#define xnewa(type, n)      ((type *) xmalloc ((n) * sizeof (type)))
-#define xrenewa(type, p, n) ((type *) xrealloc (p, (n) * sizeof (type)))
-#define xfree(p) \
-  do \
-  { \
-    if (p) \
-    { \
-      free (p); \
-      p = NULL; \
-    } \
-  } while (0)
-
-#define get_millis(start_timeval, end_timeval) \
-    (((end_timeval.tv_sec - start_timeval.tv_sec) * MILLIS_PER_SECOND) + \
-     ((end_timeval.tv_usec - start_timeval.tv_usec) / MILLIS_PER_SECOND))
-
 #define description_indent_size(width) ((width) * 0.05)
-
-typedef unsigned char bool;
-#define false ((bool) 0)
-#define true  ((bool) 1)
-
-#ifdef DEBUG
-# undef __XFUNCTION__
-# if defined(__GNUC__)
-#  define __XFUNCTION__ ((const char *) (__PRETTY_FUNCTION__))
-# elif (defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 19901L))
-#  define __XFUNCTION__ ((const char *) (__func__))
-# elif (defined(_MSC_VER) && (_MSC_VER > 1300))
-#  define __XFUNCTION__ ((const char *) (__FUNCTION__))
-# endif
-# ifdef __XFUNCTION__
-static const bool has___XFUNCTION__ = true;
-# else
-static const bool has___XFUNCTION__ = false;
-# endif
-# define xdebug(...) \
-  do \
-  { \
-    char __tag[XBUFMAX]; \
-    if (has___XFUNCTION__) \
-      snprintf (__tag, XBUFMAX, "%s:DEBUG:%s():%i: ", \
-                program_name, __XFUNCTION__, __LINE__); \
-    else \
-      snprintf (__tag, XBUFMAX, "%s:DEBUG:%i: ", \
-                program_name, __LINE__); \
-    __xdebug (__tag, __VA_ARGS__); \
-  } while (0)
-#else
-# define xdebug(...)
-#endif
 
 /* these are hacky macros that facilitate creating and formatting static
    buffers for URLs and HTML patterns in a way that looks a lot cleaner {{{ */
@@ -227,15 +146,6 @@ static const bool has___XFUNCTION__ = false;
   char html_pat_var__ (name)[XBUFMAX]; \
   snprintf (html_pat_var__ (name), XBUFMAX, EPISODE_PATTERN, (n))
 /* }}} */
-
-/* exit status codes */
-enum
-{
-  E_OKAY,     /* everything went fine */
-  E_OPTION,   /* there was an error with a command line option */
-  E_INTERNET, /* there was an error with the internet (libcurl) */
-  E_SYSTEM    /* there was a serious system error */
-};
 
 struct episode
 {
@@ -333,8 +243,11 @@ struct tvi_options
   struct spec s;
 };
 
-static const char *program_name;
+const char *program_name;
+
 static struct series series;
+static struct page_content page = {0, NULL};
+
 static size_t n_series_title_pattern = 0;
 static size_t n_series_description_pattern  = 0;
 static size_t n_series_tagline_pattern = 0;
@@ -346,7 +259,6 @@ static size_t n_search_show_pattern = 0;
 static size_t n_search_href_pattern = 0;
 static size_t n_cast_name_pattern = 0;
 static size_t n_cast_role_pattern = 0;
-static struct page_content page = {0, NULL};
 
 static struct option const options[] =
 {
@@ -384,160 +296,6 @@ set_program_name (const char *argv0)
   program_name = PROGRAM_NAME;
 }
 
-#ifdef DEBUG
-static void
-__xdebug (const char *tag, const char *fmt, ...)
-{
-  va_list args;
-
-  fputs (tag, stderr);
-  va_start (args, fmt);
-  vfprintf (stderr, fmt, args);
-  va_end (args);
-  fputc ('\n', stderr);
-}
-#endif
-
-static void
-xerror (int errnum, const char *fmt, ...)
-{
-  va_list args;
-
-  fprintf (stderr, "%s: error: ", program_name);
-  va_start (args, fmt);
-  vfprintf (stderr, fmt, args);
-  va_end (args);
-  if (errnum != 0)
-    fprintf (stderr, ": %s (errno=%i)", strerror (errnum), errnum);
-  fputc ('\n', stderr);
-}
-
-static void
-die (int exit_status, const char *fmt, ...)
-{
-  va_list args;
-
-  fprintf (stderr, "%s: error: ", program_name);
-  va_start (args, fmt);
-  vfprintf (stderr, fmt, args);
-  va_end (args);
-  fputc ('\n', stderr);
-  exit (exit_status);
-}
-
-static size_t
-xstrlen (const char *s, const char *x)
-{
-  bool c;
-  size_t n;
-  const char *e;
-  const char *p;
-
-  n = 0;
-  for (p = s; *p; ++p)
-  {
-    c = false;
-    for (e = x; *e; ++e)
-    {
-      if (*e == *p)
-      {
-        c = true;
-        break;
-      }
-    }
-    if (!c)
-      n++;
-  }
-  return n;
-}
-
-static char *
-xstrcpy (char *dst, const char *src, const char *x)
-{
-  bool c;
-  size_t n;
-  char *p;
-  const char *e;
-  const char *s;
-
-  n = xstrlen (src, x);
-  char buf[n + 1];
-
-  for (p = buf, s = src; *s; ++s)
-  {
-    c = false;
-    for (e = x; *e; ++e)
-    {
-      if (*e == *s)
-      {
-        c = true;
-        break;
-      }
-    }
-    if (!c)
-      *p++ = *s;
-  }
-
-  *p = '\0';
-  return (char *) memcpy (dst, buf, n + 1);
-}
-
-static int
-xstrncasecmp (const char *s1, const char *s2, size_t n)
-{
-  const unsigned char *p1 = (const unsigned char *) s1;
-  const unsigned char *p2 = (const unsigned char *) s2;
-  int result;
-
-  if (p1 == p2 || n == 0)
-    return 0;
-
-  while ((result = tolower (*p1) - tolower (*p2++)) == 0)
-    if (*p1++ == '\0' || --n == 0)
-      break;
-  return result;
-}
-
-static void *
-xmalloc (size_t n)
-{
-  void *p;
-
-  p = malloc (n);
-  if (!p)
-  {
-    xerror (errno, "malloc failed");
-    exit (E_SYSTEM);
-  }
-  return p;
-}
-
-static void *
-xrealloc (void *o, size_t n)
-{
-  void *p;
-
-  p = realloc (o, n);
-  if (!p)
-  {
-    xerror (errno, "realloc failed");
-    exit (E_SYSTEM);
-  }
-  return p;
-}
-
-static char *
-xstrdup (const char *s, ssize_t n)
-{
-  size_t len;
-  char *p;
-
-  len = (n < 0) ? strlen (s) + 1 : strnlen (s, n) + 1;
-  p = xnewa (char, len);
-  p[len - 1] = '\0';
-  return (char *) memcpy (p, s, len - 1);
-}
-
 static void
 usage (bool had_error)
 {
@@ -557,26 +315,6 @@ version (void)
 {
   fputs (VERSION_TEXT, stdout);
   exit (E_OKAY);
-}
-
-static void
-replace_c (char *s, char c1, char c2)
-{
-  char *p;
-
-  for (p = s; *p; ++p)
-    if (*p == c1)
-      *p = c2;
-}
-
-static void
-strip_trailing_space (char *s)
-{
-  size_t n;
-
-  n = strlen (s) - 1;
-  while (s[n] == ' ')
-    s[n--] = '\0';
 }
 
 static void
@@ -673,27 +411,6 @@ encode_series_given_title (void)
   }
   *e = '\0';
   return encoded;
-}
-
-static void
-xgettimeofday (struct timeval *t)
-{
-  memset (t, 0, sizeof (struct timeval));
-  if (gettimeofday (t, NULL) == -1)
-  {
-    xerror (errno, "gettimeofday failed");
-    exit (E_SYSTEM);
-  }
-}
-
-static int
-console_width (void)
-{
-  struct winsize w;
-
-  if (ioctl (STDOUT_FILENO, TIOCGWINSZ, &w) != -1)
-    return w.ws_col;
-  return FALLBACK_CONSOLE_WIDTH;
 }
 
 static size_t
@@ -832,7 +549,7 @@ try_connect (const char *url, const struct tvi_options *x)
   return result;
 }
 
-static struct
+static const struct
 {
   char c;
   size_t n1;
@@ -1659,6 +1376,9 @@ person_compare (const struct person *person, const struct query *query)
 
   for (i = 0; i < query->total_tokens; ++i)
   {
+    if (xstrcasestr (person->name, query->token[i].str) ||
+        xstrcasestr (person->role, query->token[i].str))
+#if 0
     nn = strlen (person->name);
     nr = strlen (person->role);
     char lname[nn + 1];
@@ -1671,6 +1391,7 @@ person_compare (const struct person *person, const struct query *query)
     *l = '\0';
     if (strstr (lname, query->token[i].str) ||
         strstr (lrole, query->token[i].str))
+#endif
       return true;
   }
   return false;
