@@ -25,7 +25,7 @@
 #include <curl/curl.h>
 
 #include "tvi.h"
-#include "tvi-utils.h"
+#include "utils.h"
 
 #define HELP_TEXT \
   "Options:\n" \

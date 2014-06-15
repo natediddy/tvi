@@ -25,7 +25,7 @@
 #include <unistd.h>
 
 #include "tvi.h"
-#include "tvi-utils.h"
+#include "utils.h"
 
 #define FALLBACK_CONSOLE_WIDTH 40
 

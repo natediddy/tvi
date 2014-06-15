@@ -3,7 +3,7 @@
 myname=`basename $0`
 CONFIGURE_OPTIONS=
 
-if test ! -f configure.ac || test ! -f tvi.c; then
+if test ! -f configure.ac || test ! -f main.c; then
   echo "$myname: error: cannot run from outside the tvi source directory"
   exit 1
 fi

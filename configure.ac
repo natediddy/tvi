@@ -1,6 +1,6 @@
 AC_INIT(
   [tvi],
-  [3.4.5],
+  [3.4.6],
   [sforbes41@gmail.com],
   [tvi],
   [https://github.com/natediddy/tvi],
@@ -8,7 +8,7 @@ AC_INIT(
 
 AC_MSG_NOTICE([Configuring $PACKAGE_NAME $PACKAGE_VERSION])
 
-AC_CONFIG_SRCDIR([tvi.c])
+AC_CONFIG_SRCDIR([main.c])
 AC_CONFIG_HEADERS([config.h])
 AM_INIT_AUTOMAKE([-Wall no-define foreign])
 AC_CONFIG_FILES([Makefile])
