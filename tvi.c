@@ -20,13 +20,12 @@
 #include <float.h>
 #include <getopt.h>
 #include <string.h>
+#include <wchar.h>
 
 #include <curl/curl.h>
 
 #include "tvi.h"
-#include "tvi-util.h"
-
-#define TVDOTCOM "http://www.tv.com"
+#include "tvi-utils.h"
 
 #define HELP_TEXT \
   "Options:\n" \
@@ -105,10 +104,11 @@
 #define EPISODE(s, n)       s.episode[(n)]
 #define FIRST_EPISODE_OF(s) s.episode[0]
 #define LAST_EPISODE_OF(s)  s.episode[s.total_episodes - 1]
+#define PERSON(n)           series.cast.person[(n)]
 
 #define PROPELLER_ROTATE_INTERVAL 0.25f
 #define propeller_rotate_interval_passed(m) \
-  ((m) >= MILLIS_PER_SECOND * PROPELLER_ROTATE_INTERVAL)
+  ((m) >= TVI_MILLIS_PER_SECOND * PROPELLER_ROTATE_INTERVAL)
 
 #define description_indent_size(width) ((width) * 0.05)
 
@@ -118,41 +118,41 @@
 #define url_var__(name) __url_var (name)
 
 #define search_url(name) \
-  char url_var__ (name)[XBUFMAX]; \
+  char url_var__ (name)[TVI_BUFMAX]; \
   char *__e = encode_series_given_title (); \
-  snprintf (url_var__ (name), XBUFMAX, SEARCH_URL, __e); \
-  xfree (__e)
+  snprintf (url_var__ (name), TVI_BUFMAX, SEARCH_URL, __e); \
+  tvi_free (__e)
 
 #define episodes_url(name) \
-  char url_var__ (name)[XBUFMAX]; \
-  snprintf (url_var__ (name), XBUFMAX, EPISODES_URL, series.title.url)
+  char url_var__ (name)[TVI_BUFMAX]; \
+  snprintf (url_var__ (name), TVI_BUFMAX, EPISODES_URL, series.title.url)
 
 #define cast_url(name) \
-  char url_var__ (name)[XBUFMAX]; \
-  snprintf (url_var__ (name), XBUFMAX, CAST_URL, series.title.url)
+  char url_var__ (name)[TVI_BUFMAX]; \
+  snprintf (url_var__ (name), TVI_BUFMAX, CAST_URL, series.title.url)
 
 #define season_url(name, n) \
-  char url_var__ (name)[XBUFMAX]; \
-  snprintf (url_var__ (name), XBUFMAX, SEASON_URL, series.title.url, (n))
+  char url_var__ (name)[TVI_BUFMAX]; \
+  snprintf (url_var__ (name), TVI_BUFMAX, SEASON_URL, series.title.url, (n))
 
 #define __html_pat_var(name) html_pattern_ ## name
 #define html_pat_var__(name) __html_pat_var (name)
 
 #define season_pattern(name, n) \
-  char html_pat_var__ (name)[XBUFMAX]; \
-  snprintf (html_pat_var__ (name), XBUFMAX, SEASON_PATTERN, (n))
+  char html_pat_var__ (name)[TVI_BUFMAX]; \
+  snprintf (html_pat_var__ (name), TVI_BUFMAX, SEASON_PATTERN, (n))
 
 #define episode_pattern(name, n) \
-  char html_pat_var__ (name)[XBUFMAX]; \
-  snprintf (html_pat_var__ (name), XBUFMAX, EPISODE_PATTERN, (n))
+  char html_pat_var__ (name)[TVI_BUFMAX]; \
+  snprintf (html_pat_var__ (name), TVI_BUFMAX, EPISODE_PATTERN, (n))
 /* }}} */
 
 struct episode
 {
   bool has_aired;
   double rating;
-  char air[XBUFMAX];
-  char title[XBUFMAX];
+  char air[TVI_BUFMAX];
+  char title[TVI_BUFMAX];
   char *description;
 };
 
@@ -160,33 +160,35 @@ struct season
 {
   int total_episodes;
   double rating;
-  struct episode episode[XBUFMAX];
+  struct episode episode[TVI_BUFMAX];
 };
 
 struct person
 {
-  char name[XBUFMAX];
-  char role[XBUFMAX];
+  size_t n_name;
+  size_t n_role;
+  char name[TVI_BUFMAX];
+  char role[TVI_BUFMAX];
 };
 
 struct cast
 {
-  int total_persons;
-  struct person person[XBUFMAX];
+  int total_people;
+  struct person person[TVI_BUFMAX];
 };
 
 struct schedule
 {
   bool ended;
-  char day[XBUFMAX];
-  char time[XBUFMAX];
-  char network[XBUFMAX];
+  char day[TVI_BUFMAX];
+  char time[TVI_BUFMAX];
+  char network[TVI_BUFMAX];
 };
 
 struct title
 {
-  char proper[XBUFMAX]; /* proper (e.g. "The Wire") */
-  char url[XBUFMAX];    /* for URL (e.g. "the-wire") */
+  char proper[TVI_BUFMAX]; /* proper (e.g. "The Wire") */
+  char url[TVI_BUFMAX];    /* for URL (e.g. "the-wire") */
   char *given;          /* from command line (e.g. "the wire") */
 };
 
@@ -198,9 +200,9 @@ struct series
   struct cast cast;
   struct schedule schedule;
   struct title title;
-  char air_start[XBUFMAX];
-  char air_end[XBUFMAX];
-  struct season season[XBUFMAX];
+  char air_start[TVI_BUFMAX];
+  char air_end[TVI_BUFMAX];
+  struct season season[TVI_BUFMAX];
   char *description;
 };
 
@@ -213,19 +215,19 @@ struct page_content
 struct spec
 {
   int n;
-  int v[XBUFMAX];
+  int v[TVI_BUFMAX];
 };
 
 struct token
 {
   size_t n;
-  char str[XBUFMAX];
+  char str[TVI_BUFMAX];
 };
 
 struct query
 {
   int total_tokens;
-  struct token token[XBUFMAX];
+  struct token token[TVI_BUFMAX];
 };
 
 struct tvi_options
@@ -238,7 +240,7 @@ struct tvi_options
   bool next;
   bool show_progress;
   char attrs;
-  char cast_req[XBUFMAX];
+  char cast_pattern[TVI_BUFMAX];
   struct spec e;
   struct spec s;
 };
@@ -350,7 +352,7 @@ set_series_given_title (char **item)
   }
 
   pos = 0;
-  series.title.given = xnewa (char, n + 1);
+  series.title.given = tvi_newa (char, n + 1);
 
   for (p = 0, t = series.title.given; item[p]; ++p)
   {
@@ -387,10 +389,10 @@ encode_series_given_title (void)
   }
 
   if (n == ng)
-    return xstrdup (series.title.given, n);
+    return tvi_strdup (series.title.given, n);
 
   bool encoded_char;
-  char *encoded = xnewa (char, n + 1);
+  char *encoded = tvi_newa (char, n + 1);
   char *e = encoded;
 
   for (s = series.title.given; *s; ++s, ++e)
@@ -422,7 +424,7 @@ page_write_cb (void *buf, size_t size, size_t nmemb, void *data)
   p = (struct page_content *) data;
   n = size * nmemb;
 
-  p->buffer = xrenewa (char, p->buffer, p->n + n + 1);
+  p->buffer = tvi_renewa (char, p->buffer, p->n + n + 1);
   memcpy (p->buffer + p->n, buf, n);
   p->n += n;
   p->buffer[p->n] = '\0';
@@ -449,12 +451,12 @@ progress_cb (void *data, double dt, double dc, double ut, double uc)
     millis = -1;
   else
   {
-    xgettimeofday (&now);
-    millis = get_millis (last, now);
+    tvi_gettimeofday (&now);
+    millis = tvi_get_millis (last, now);
   }
 
   if (millis == -1 || propeller_rotate_interval_passed (millis)) {
-    space_remaining = console_width ();
+    space_remaining = tvi_console_width ();
     fputs (PROGRESS_LOADING_MESSAGE, stdout);
     space_remaining -= strlen (PROGRESS_LOADING_MESSAGE);
     if (propeller_pos == PROPELLER_SIZE)
@@ -469,7 +471,7 @@ progress_cb (void *data, double dt, double dc, double ut, double uc)
     fputc ('\r', stdout);
     fflush (stdout);
     if (millis == -1)
-      xgettimeofday (&last);
+      tvi_gettimeofday (&last);
     else
     {
       last.tv_sec = now.tv_sec;
@@ -485,7 +487,7 @@ progress_finish (void)
   int i;
   int w;
 
-  w = console_width ();
+  w = tvi_console_width ();
   for (i = 0; i < w; ++i)
     fputc (' ', stdout);
   fputc ('\r', stdout);
@@ -496,7 +498,7 @@ check_curl_status (CURL *cp, CURLcode status)
 {
   if (status != CURLE_OK)
   {
-    xerror (0, "libcurl error: %s", curl_easy_strerror (status));
+    tvi_error (0, "libcurl error: %s", curl_easy_strerror (status));
     curl_easy_cleanup (cp);
     exit (E_INTERNET);
   }
@@ -509,14 +511,14 @@ try_connect (const char *url, const struct tvi_options *x)
 
   if (!cp)
   {
-    xerror (0, "failed to initialize libcurl: %s",
-            curl_easy_strerror (CURLE_FAILED_INIT));
+    tvi_error (0, "failed to initialize libcurl: %s",
+               curl_easy_strerror (CURLE_FAILED_INIT));
     return false;
   }
 
-  xdebug ("connecting to \"%s\"...", url);
+  tvi_debug ("connecting to \"%s\"...", url);
   page.n = 0;
-  page.buffer = xnewa (char, 1);
+  page.buffer = tvi_newa (char, 1);
 
 #define __setopt(o, p) check_curl_status (cp, curl_easy_setopt (cp, o, p))
   __setopt (CURLOPT_URL, url);
@@ -539,9 +541,10 @@ try_connect (const char *url, const struct tvi_options *x)
   {
     long res = 0L;
     if (curl_easy_getinfo (cp, CURLINFO_RESPONSE_CODE, &res) == CURLE_OK)
-      xerror (0, "%s (http response=%li)", curl_easy_strerror (status), res);
+      tvi_error (0, "%s (http response=%li)",
+                 curl_easy_strerror (status), res);
     else
-      xerror (0, curl_easy_strerror (status));
+      tvi_error (0, curl_easy_strerror (status));
     result = false;
   }
 
@@ -574,7 +577,7 @@ is_entity_ref (const char *s)
   size_t i;
 
   for (i = 0; entity_ref[i].c; ++i)
-    if (xstrncasecmp (s, entity_ref[i].s1, entity_ref[i].n1) == 0 ||
+    if (tvi_strncasecmp (s, entity_ref[i].s1, entity_ref[i].n1) == 0 ||
         memcmp (s, entity_ref[i].s2, entity_ref[i].n2) == 0)
       return true;
   return false;
@@ -588,7 +591,7 @@ entity_ref_char (char **s)
 
   for (i = 0; entity_ref[i].c; ++i)
   {
-    if (xstrncasecmp (*s, entity_ref[i].s1, entity_ref[i].n1) == 0)
+    if (tvi_strncasecmp (*s, entity_ref[i].s1, entity_ref[i].n1) == 0)
       n = entity_ref[i].n1;
     else if (memcmp (*s, entity_ref[i].s2, entity_ref[i].n2) == 0)
       n = entity_ref[i].n2;
@@ -618,6 +621,9 @@ set_url_title_best_guess (void)
     *u = *g;
   }
   *u = '\0';
+
+  tvi_debug ("guessed URL title for \"%s\": \"%s\"",
+             series.title.given, series.title.url);
 }
 
 static void
@@ -641,7 +647,7 @@ parse_search_page (void)
 
   if (!*series.title.url)
   {
-    xdebug ("failed to parse title for URL, guessing...");
+    tvi_debug ("failed to parse title for URL; guessing...");
     set_url_title_best_guess ();
   }
 }
@@ -664,8 +670,8 @@ parse_series_proper_title (void)
   }
 
   if (!*series.title.proper)
-    xdebug ("failed to parse proper title");
-  strip_trailing_space (series.title.proper);
+    tvi_debug ("failed to parse proper title");
+  tvi_strip_trailing_space (series.title.proper);
 }
 
 static void
@@ -687,11 +693,11 @@ parse_series_description (void)
 
   if (n == 0)
   {
-    series.description = xstrdup (EMPTY_DESCRIPTION, -1);
+    series.description = tvi_strdup (EMPTY_DESCRIPTION, -1);
     return;
   }
 
-  series.description = xnewa (char, n + 1);
+  series.description = tvi_newa (char, n + 1);
   p = strstr (page.buffer, SERIES_DESCRIPTION_PATTERN);
 
   if (p && *p)
@@ -707,7 +713,7 @@ parse_series_description (void)
   }
 
   if (!series.description || !*series.description)
-    xdebug ("failed to parse series description");
+    tvi_debug ("failed to parse series description");
 }
 
 static void
@@ -716,7 +722,7 @@ parse_series_schedule (void)
   char *e;
   char *p;
   char *q;
-  char tagline[XBUFMAX];
+  char tagline[TVI_BUFMAX];
   struct schedule *s = &series.schedule;
 
   p = strstr (page.buffer, SERIES_TAGLINE_PATTERN);
@@ -845,7 +851,7 @@ init_series (void)
   series.title.url[0] = '\0';
   series.title.given = NULL;
 
-  series.cast.total_persons = 0;
+  series.cast.total_people = 0;
 
   series.description = NULL;
 }
@@ -910,7 +916,7 @@ parse_episode_air (struct episode *episode, char **secp)
 static void
 parse_episode_rating (struct episode *episode, char **secp)
 {
-  char buffer[XBUFMAX];
+  char buffer[TVI_BUFMAX];
   char *r;
   char *p;
 
@@ -947,7 +953,7 @@ parse_episode_description (struct episode *episode, char **secp)
     p += n_episode_description_pattern;
     if (*p == '<' && *(p + 1) == '/')
     {
-      episode->description = xstrdup (EMPTY_DESCRIPTION, -1);
+      episode->description = tvi_strdup (EMPTY_DESCRIPTION, -1);
       return;
     }
     for (;;)
@@ -983,7 +989,7 @@ parse_episode_description (struct episode *episode, char **secp)
     }
   }
 
-  episode->description = xnewa (char, n + 1);
+  episode->description = tvi_newa (char, n + 1);
   p = strstr (*secp, EPISODE_DESCRIPTION_PATTERN);
 
   if (p && *p)
@@ -1027,7 +1033,8 @@ parse_episode_description (struct episode *episode, char **secp)
   }
 
   if (!episode->description || !*episode->description)
-    xdebug ("failed to parse episode description (\"%s\")", episode->title);
+    tvi_debug ("failed to parse episode description (\"%s\")",
+               episode->title);
 }
 
 static void
@@ -1035,7 +1042,7 @@ set_episode_has_aired (struct episode *episode)
 {
   size_t n;
   time_t a;
-  char buffer[XBUFMAX];
+  char buffer[TVI_BUFMAX];
   struct tm tm;
   char *t;
 
@@ -1051,7 +1058,8 @@ set_episode_has_aired (struct episode *episode)
   a = mktime (&tm);
   if (a == -1)
   {
-    xerror (0, "failed to get time value from air date/time \"%s\"", buffer);
+    tvi_error (0, "failed to get time value from air date/time \"%s\"",
+               buffer);
     return;
   }
 
@@ -1092,7 +1100,7 @@ parse_season_page (struct season *season)
   struct episode *episode;
 
   init_season (season);
-  for (i = 0; i < XBUFMAX; ++i)
+  for (i = 0; i < TVI_BUFMAX; ++i)
   {
     episode_pattern (e, i + 1);
     p = strstr (page.buffer, html_pattern_e);
@@ -1113,6 +1121,8 @@ parse_season_page (struct season *season)
 static void
 init_person (struct person *person)
 {
+  person->n_name = 0;
+  person->n_role = 0;
   person->name[0] = '\0';
   person->role[0] = '\0';
 }
@@ -1128,33 +1138,35 @@ parse_cast_page (void)
   r = NULL;
   p = page.buffer;
   for (i = 0, n = strstr (p, CAST_NAME_PATTERN);
-       i < XBUFMAX && n && *n;
+       i < TVI_BUFMAX && n && *n;
        ++i, n = strstr (p, CAST_NAME_PATTERN))
   {
-    series.cast.total_persons++;
-    init_person (&series.cast.person[i]);
+    series.cast.total_people++;
+    init_person (&PERSON (i));
     for (n += n_cast_name_pattern; *n != '>'; ++n)
       ;
     if (*n == '>')
       n++;
-    for (p = series.cast.person[i].name; *n != '<'; ++p, ++n)
+    for (p = PERSON (i).name; *n != '<'; ++p, ++n)
     {
       while (is_entity_ref (n))
         *p++ = entity_ref_char (&n);
       *p = *n;
     }
     *p = '\0';
+    PERSON (i).n_name = strlen (PERSON (i).name);
     r = strstr (n, CAST_ROLE_PATTERN);
     if (r && *r)
     {
       r += n_cast_role_pattern;
-      for (p = series.cast.person[i].role; *r != '<'; ++r, ++p)
+      for (p = PERSON (i).role; *r != '<'; ++r, ++p)
       {
         while (is_entity_ref (r))
           *p++ = entity_ref_char (&r);
         *p = *r;
       }
       *p = '\0';
+      PERSON (i).n_role = strlen (PERSON (i).role);
       p = r;
     }
   }
@@ -1209,13 +1221,13 @@ retrieve_series (const struct tvi_options *x)
   search_url (search);
 
   if (!try_connect (url_search, x))
-    die (E_INTERNET, "failed to connect to \"%s\"", url_search);
+    tvi_die (E_INTERNET, "failed to connect to \"%s\"", url_search);
 
   parse_search_page ();
 
   episodes_url (episodes);
   if (!try_connect (url_episodes, x))
-    die (E_INTERNET, "failed to connect to \"%s\"", url_episodes);
+    tvi_die (E_INTERNET, "failed to connect to \"%s\"", url_episodes);
 
   parse_episodes_page ();
 
@@ -1223,7 +1235,7 @@ retrieve_series (const struct tvi_options *x)
   {
     cast_url (cast);
     if (!try_connect (url_cast, x))
-      die (E_INTERNET, "failed to connect to \"%s\"", url_cast);
+      tvi_die (E_INTERNET, "failed to connect to \"%s\"", url_cast);
     parse_cast_page ();
     return;
   }
@@ -1234,7 +1246,7 @@ retrieve_series (const struct tvi_options *x)
   {
     season_url (season, i + 1);
     if (!try_connect (url_season, x))
-      die (E_INTERNET, "failed to connect to \"%s\"", url_season);
+      tvi_die (E_INTERNET, "failed to connect to \"%s\"", url_season);
     parse_season_page (&SEASON (i));
   }
 
@@ -1256,7 +1268,7 @@ display_description (const char *desc)
   char *w;
   const char *p;
 
-  width = console_width ();
+  width = tvi_console_width ();
   indent_size = description_indent_size (width);
   stop = width - indent_size;
 
@@ -1288,7 +1300,7 @@ display_description (const char *desc)
   {
     while (isspace (*p))
       p++;
-    char word[XBUFMAX];
+    char word[TVI_BUFMAX];
     for (w = word; *p && !isspace (*p); ++p, ++w)
       *w = *p;
     *w = '\0';
@@ -1369,31 +1381,11 @@ static bool
 person_compare (const struct person *person, const struct query *query)
 {
   int i;
-  size_t nn;
-  size_t nr;
-  char *l;
-  const char *s;
 
   for (i = 0; i < query->total_tokens; ++i)
-  {
-    if (xstrcasestr (person->name, query->token[i].str) ||
-        xstrcasestr (person->role, query->token[i].str))
-#if 0
-    nn = strlen (person->name);
-    nr = strlen (person->role);
-    char lname[nn + 1];
-    for (l = lname, s = person->name; *s; ++l, ++s)
-      *l = tolower (*s);
-    *l = '\0';
-    char lrole[nr + 1];
-    for (l = lrole, s = person->role; *s; ++l, ++s)
-      *l = tolower (*s);
-    *l = '\0';
-    if (strstr (lname, query->token[i].str) ||
-        strstr (lrole, query->token[i].str))
-#endif
+    if (tvi_strcasestr (person->name, query->token[i].str) ||
+        tvi_strcasestr (person->role, query->token[i].str))
       return true;
-  }
   return false;
 }
 
@@ -1410,6 +1402,58 @@ attributes_set (char attrs)
   if (attrs & ATTR_DESCRIPTION)
     n++;
   return n;
+}
+
+static void
+display_cast_and_crew (const char *pattern)
+{
+  size_t i;
+  size_t n;
+  size_t longest;
+  ssize_t offset;
+  struct query query;
+
+  if (pattern)
+    init_query (&query, pattern);
+
+  longest = 0;
+  for (i = 0; i < series.cast.total_people; ++i)
+  {
+    if (pattern && !person_compare (&PERSON (i), &query))
+      continue;
+    if (PERSON (i).n_name > longest)
+      longest = PERSON (i).n_name;
+  }
+
+  printf ("%s cast and crew (", TITLE);
+  if (pattern)
+    printf ("matching \"%s\"", pattern);
+  else
+    fputs ("all", stdout);
+  fputs ("):\n", stdout);
+
+#define __print_line(__s1, __n, __s2) \
+  do \
+  { \
+    fputs ("  ", stdout); \
+    fputs (__s1, stdout); \
+    fputs ("   ", stdout); \
+    for (offset = longest - __n; offset >= 0; --offset) \
+      fputc (' ', stdout); \
+    fputs (__s2, stdout); \
+    fputc ('\n', stdout); \
+  } while (0)
+
+  __print_line ("Name", 4, "Role");
+  __print_line ("----", 4, "----");
+  for (i = 0; i < series.cast.total_people; ++i)
+  {
+    if (pattern && !person_compare (&PERSON (i), &query))
+      continue;
+    __print_line (PERSON (i).name, PERSON (i).n_name, PERSON (i).role);
+  }
+
+#undef __print_line
 }
 
 static void
@@ -1442,24 +1486,7 @@ display_series (const struct tvi_options *x)
 
   if (x->cast)
   {
-    if (*x->cast_req)
-    {
-      struct query query;
-      init_query (&query, x->cast_req);
-      printf ("%s cast and crew [matching \"%s\"] (NAME -> ROLE):\n",
-              TITLE, x->cast_req);
-      for (i = 0; i < series.cast.total_persons; ++i)
-        if (person_compare (&series.cast.person[i], &query))
-          printf ("  %s -> %s\n",
-                  series.cast.person[i].name, series.cast.person[i].role);
-    }
-    else
-    {
-      printf ("%s cast and crew (NAME -> ROLE):\n", TITLE);
-      for (i = 0; i < series.cast.total_persons; ++i)
-        printf ("  %s -> %s\n",
-                series.cast.person[i].name, series.cast.person[i].role);
-    }
+    display_cast_and_crew ((!*x->cast_pattern) ? NULL : x->cast_pattern);
     return;
   }
 
@@ -1592,25 +1619,27 @@ verify_options (const struct tvi_options *x)
   if (x->cast)
   {
     if (x->attrs & ATTR_AIR)
-      xerror (0, "options --cast and --air are mutually exclusive");
+      tvi_error (0, "options --cast and --air are mutually exclusive");
     if (x->attrs & ATTR_DESCRIPTION)
-      xerror (0, "options --cast and --desc are mutually exclusive");
+      tvi_error (0, "options --cast and --desc are mutually exclusive");
     if (x->attrs & ATTR_RATING)
-      xerror (0, "options --cast and --rating are mutually exclusive");
+      tvi_error (0, "options --cast and --rating are mutually exclusive");
     if (x->info)
-      xerror (0, "options --cast and --info are mutually exclusive");
+      tvi_error (0, "options --cast and --info are mutually exclusive");
     if (x->last)
-      xerror (0, "options --cast and --last are mutually exclusive");
+      tvi_error (0, "options --cast and --last are mutually exclusive");
     if (x->highest_rated)
-      xerror (0, "options --cast and --highest-rated are mutually exclusive");
+      tvi_error (0, "options --cast and --highest-rated are mutually "
+                    "exclusive");
     if (x->lowest_rated)
-      xerror (0, "options --cast and --lowest-rated are mutually exclusive");
+      tvi_error (0, "options --cast and --lowest-rated are mutually "
+                    "exclusive");
     if (x->next)
-      xerror (0, "options --cast and --next are mutually exclusive");
+      tvi_error (0, "options --cast and --next are mutually exclusive");
     if (x->s.n > 0)
-      xerror (0, "options --cast and --season are mutually exclusive");
+      tvi_error (0, "options --cast and --season are mutually exclusive");
     if (x->e.n > 0)
-      xerror (0, "options --cast and --episode are mutually exclusive");
+      tvi_error (0, "options --cast and --episode are mutually exclusive");
     if (x->attrs & ATTR_AIR ||
         x->attrs & ATTR_DESCRIPTION ||
         x->attrs & ATTR_RATING ||
@@ -1627,39 +1656,49 @@ verify_options (const struct tvi_options *x)
   if (x->highest_rated)
   {
     if (x->info)
-      xerror (0, "options --highest-rated and --info are mutually exclusive");
+      tvi_error (0, "options --highest-rated and --info are mutually "
+                    "exclusive");
     if (x->last)
-      xerror (0, "options --highest-rated and --last are mutually exclusive");
+      tvi_error (0, "options --highest-rated and --last are mutually "
+                    "exclusive");
     if (x->lowest_rated)
-      xerror (0, "options --highest-rated and --lowest-rated are mutually "
-                 "exclusive");
+      tvi_error (0, "options --highest-rated and --lowest-rated are mutually "
+                    "exclusive");
     if (x->next)
-      xerror (0, "options --highest-rated and --next are mutually exclusive");
+      tvi_error (0, "options --highest-rated and --next are mutually "
+                    "exclusive");
     if (x->s.n > 0)
-      xerror (0, "options --highest-rated and --season are mutually "
-                 "exclusive");
+      tvi_error (0, "options --highest-rated and --season are mutually "
+                    "exclusive");
     if (x->e.n > 0)
-      xerror (0, "options --highest-rated and --episode are mutually "
-                 "exclusive");
-    if (x->info || x->last || x->lowest_rated ||
-        x->next || x->s.n > 0 || x->e.n > 0)
+      tvi_error (0, "options --highest-rated and --episode are mutually "
+                    "exclusive");
+    if (x->info ||
+        x->last ||
+        x->lowest_rated ||
+        x->next ||
+        x->s.n > 0 ||
+        x->e.n > 0)
       usage (true);
   }
 
   if (x->lowest_rated)
   {
     if (x->info)
-      xerror (0, "options --lowest-rated and --info are mutually exclusive");
+      tvi_error (0, "options --lowest-rated and --info are mutually "
+                    "exclusive");
     if (x->last)
-      xerror (0, "options --lowest-rated and --last are mutually exclusive");
+      tvi_error (0, "options --lowest-rated and --last are mutually "
+                    "exclusive");
     if (x->next)
-      xerror (0, "options --lowest-rated and --next are mutually exclusive");
+      tvi_error (0, "options --lowest-rated and --next are mutually "
+                    "exclusive");
     if (x->s.n > 0)
-      xerror (0, "options --lowest-rated and --season are mutually "
-                 "exclusive");
+      tvi_error (0, "options --lowest-rated and --season are mutually "
+                    "exclusive");
     if (x->e.n > 0)
-      xerror (0, "options --lowest-rated and --episode are mutually "
-                 "exclusive");
+      tvi_error (0, "options --lowest-rated and --episode are mutually "
+                    "exclusive");
     if (x->info || x->last || x->next || x->s.n > 0 || x->e.n > 0)
       usage (true);
   }
@@ -1667,13 +1706,13 @@ verify_options (const struct tvi_options *x)
   if (x->info)
   {
     if (x->last)
-      xerror (0, "options --info and --last are mutually exclusive");
+      tvi_error (0, "options --info and --last are mutually exclusive");
     if (x->next)
-      xerror (0, "options --info and --next are mutually exclusive");
+      tvi_error (0, "options --info and --next are mutually exclusive");
     if (x->s.n > 0)
-      xerror (0, "options --info and --season are mutually exclusive");
+      tvi_error (0, "options --info and --season are mutually exclusive");
     if (x->e.n > 0)
-      xerror (0, "options --info and --episode are mutually exclusive");
+      tvi_error (0, "options --info and --episode are mutually exclusive");
     if (x->last || x->next || x->s.n > 0 || x->e.n > 0)
       usage (true);
   }
@@ -1681,11 +1720,11 @@ verify_options (const struct tvi_options *x)
   if (x->last)
   {
     if (x->next)
-      xerror (0, "options --last and --next are mutually exclusive");
+      tvi_error (0, "options --last and --next are mutually exclusive");
     if (x->s.n > 0)
-      xerror (0, "options --last and --season are mutually exclusive");
+      tvi_error (0, "options --last and --season are mutually exclusive");
     if (x->e.n > 0)
-      xerror (0, "options --last and --episode are mutually exclusive");
+      tvi_error (0, "options --last and --episode are mutually exclusive");
     if (x->next || x->s.n > 0 || x->e.n > 0)
       usage (true);
   }
@@ -1693,9 +1732,9 @@ verify_options (const struct tvi_options *x)
   if (x->next)
   {
     if (x->s.n > 0)
-      xerror (0, "options --next and --season are mutually exclusive");
+      tvi_error (0, "options --next and --season are mutually exclusive");
     if (x->e.n > 0)
-      xerror (0, "options --next and --episode are mutually exclusive");
+      tvi_error (0, "options --next and --episode are mutually exclusive");
     if (x->s.n > 0 || x->e.n > 0)
       usage (true);
   }
@@ -1896,8 +1935,8 @@ verify_options_with_series (struct tvi_options *x)
 
   if (x->highest_rated || x->lowest_rated)
   {
-    int ea[XBUFMAX];
-    int sa[XBUFMAX];
+    int ea[TVI_BUFMAX];
+    int sa[TVI_BUFMAX];
     if (x->highest_rated)
       find_highest_rated_episode (sa, ea);
     else
@@ -1936,15 +1975,15 @@ verify_options_with_series (struct tvi_options *x)
     {
       if (x->e.v[e] <= 0 || x->e.v[e] > series.total_episodes)
       {
-        xerror (0, "invalid episode specified -- %i", x->e.v[e]);
+        tvi_error (0, "invalid episode specified -- %i", x->e.v[e]);
         had_error = true;
       }
     }
     if (had_error)
     {
-      xerror (0, "\"%s\" has a total of %i episodes",
-              TITLE, series.total_episodes);
-      die (E_OPTION, "specify a value between 1-%i", series.total_episodes);
+      tvi_error (0, "\"%s\" has a total of %i episodes",
+                 TITLE, series.total_episodes);
+      tvi_die (E_OPTION, "specify a value between 1-%i", series.total_episodes);
     }
   }
 
@@ -1955,15 +1994,15 @@ verify_options_with_series (struct tvi_options *x)
     {
       if (x->s.v[s] <= 0 || x->s.v[s] > series.total_seasons)
       {
-        xerror (0, "invalid season specified -- %i", x->s.v[s]);
+        tvi_error (0, "invalid season specified -- %i", x->s.v[s]);
         had_error = true;
       }
     }
     if (had_error)
     {
-      xerror (0, "\"%s\" has a total of %i seasons",
-              TITLE, series.total_seasons);
-      die (E_OPTION, "specify a value between 1-%i", series.total_seasons);
+      tvi_error (0, "\"%s\" has a total of %i seasons",
+                 TITLE, series.total_seasons);
+      tvi_die (E_OPTION, "specify a value between 1-%i", series.total_seasons);
     }
   }
 
@@ -1979,17 +2018,17 @@ verify_options_with_series (struct tvi_options *x)
         if (x->e.v[e] <= 0 ||
             x->e.v[e] > SEASON (x->s.v[s] - 1).total_episodes)
         {
-          xerror (0, "invalid episode specified for season %i -- %i",
-                  x->s.v[s], x->e.v[e]);
+          tvi_error (0, "invalid episode specified for season %i -- %i",
+                     x->s.v[s], x->e.v[e]);
           had_season_episode_error = true;
         }
       }
       if (had_season_episode_error)
       {
-        xerror (0, "season %i of \"%s\" has a total of %i episodes",
-                x->s.v[s], TITLE, SEASON (x->s.v[s] - 1).total_episodes);
-        xerror (0, "specify value(s) between 1-%i",
-                SEASON (x->s.v[s] - 1).total_episodes);
+        tvi_error (0, "season %i of \"%s\" has a total of %i episodes",
+                   x->s.v[s], TITLE, SEASON (x->s.v[s] - 1).total_episodes);
+        tvi_error (0, "specify value(s) between 1-%i",
+                   SEASON (x->s.v[s] - 1).total_episodes);
         had_error = true;
       }
     }
@@ -2002,7 +2041,7 @@ static void
 init_tvi_options (struct tvi_options *x)
 {
   x->cast = false;
-  x->cast_req[0] = '\0';
+  x->cast_pattern[0] = '\0';
   x->highest_rated = false;
   x->info = false;
   x->last = false;
@@ -2020,13 +2059,13 @@ cleanup (void)
   int e;
   int s;
 
-  xfree (page.buffer);
-  xfree (series.title.given);
-  xfree (series.description);
+  tvi_free (page.buffer);
+  tvi_free (series.title.given);
+  tvi_free (series.description);
 
   for (s = 0; s < series.total_seasons; ++s)
     for (e = 0; e < SEASON (s).total_episodes; ++e)
-      xfree (EPISODE (SEASON (s), e).description);
+      tvi_free (EPISODE (SEASON (s), e).description);
 }
 
 int
@@ -2052,7 +2091,7 @@ main (int argc, char **argv)
       case 'c':
         x.cast = true;
         if (optarg)
-          memcpy (x.cast_req, optarg, strlen (optarg) + 1);
+          memcpy (x.cast_pattern, optarg, strlen (optarg) + 1);
         break;
       case 'd':
         x.attrs |= ATTR_DESCRIPTION;
@@ -2060,8 +2099,8 @@ main (int argc, char **argv)
       case 'e':
         if (!spec_parse_from_optarg (&x.e, optarg))
         {
-          xerror (0, "invalid episode argument -- `%s'", optarg);
-          die (E_OPTION, SPEC_ERROR_MESSAGE);
+          tvi_error (0, "invalid episode argument -- `%s'", optarg);
+          tvi_die (E_OPTION, SPEC_ERROR_MESSAGE);
         }
         break;
       case 'h':
@@ -2091,8 +2130,8 @@ main (int argc, char **argv)
       case 's':
         if (!spec_parse_from_optarg (&x.s, optarg))
         {
-          xerror (0, "invalid season argument -- `%s'", optarg);
-          die (E_OPTION, SPEC_ERROR_MESSAGE);
+          tvi_error (0, "invalid season argument -- `%s'", optarg);
+          tvi_die (E_OPTION, SPEC_ERROR_MESSAGE);
         }
         break;
       case 'v':
@@ -2106,7 +2145,7 @@ main (int argc, char **argv)
 
   if (argc <= optind)
   {
-    xerror (0, "missing TV series title");
+    tvi_error (0, "missing TV series title");
     usage (true);
   }
 

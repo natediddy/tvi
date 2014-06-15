@@ -25,15 +25,15 @@
 #include <unistd.h>
 
 #include "tvi.h"
-#include "tvi-util.h"
+#include "tvi-utils.h"
 
 #define FALLBACK_CONSOLE_WIDTH 40
 
 extern const char *program_name;
 
-#ifdef DEBUG
+#ifdef TVI_DEBUG
 void
-__xdebug (const char *tag, const char *fmt, ...)
+__tvi_debug (const char *tag, const char *fmt, ...)
 {
   va_list args;
 
@@ -46,7 +46,7 @@ __xdebug (const char *tag, const char *fmt, ...)
 #endif
 
 void
-xerror (int errnum, const char *fmt, ...)
+tvi_error (int errno_value, const char *fmt, ...)
 {
   va_list args;
 
@@ -54,13 +54,13 @@ xerror (int errnum, const char *fmt, ...)
   va_start (args, fmt);
   vfprintf (stderr, fmt, args);
   va_end (args);
-  if (errnum != 0)
-    fprintf (stderr, ": %s (errno=%i)", strerror (errnum), errnum);
+  if (errno_value != 0)
+    fprintf (stderr, ": %s (%i)", strerror (errno_value), errno_value);
   fputc ('\n', stderr);
 }
 
 void
-die (int exit_status, const char *fmt, ...)
+tvi_die (int exit_status, const char *fmt, ...)
 {
   va_list args;
 
@@ -72,66 +72,9 @@ die (int exit_status, const char *fmt, ...)
   exit (exit_status);
 }
 
-size_t
-strlen_except (const char *s, const char *x)
-{
-  bool c;
-  size_t n;
-  const char *e;
-  const char *p;
-
-  n = 0;
-  for (p = s; *p; ++p)
-  {
-    c = false;
-    for (e = x; *e; ++e)
-    {
-      if (*e == *p)
-      {
-        c = true;
-        break;
-      }
-    }
-    if (!c)
-      n++;
-  }
-  return n;
-}
-
-char *
-strcpy_except (char *dst, const char *src, const char *x)
-{
-  bool c;
-  size_t n;
-  char *p;
-  const char *e;
-  const char *s;
-
-  n = strlen_except (src, x);
-  char buf[n + 1];
-
-  for (p = buf, s = src; *s; ++s)
-  {
-    c = false;
-    for (e = x; *e; ++e)
-    {
-      if (*e == *s)
-      {
-        c = true;
-        break;
-      }
-    }
-    if (!c)
-      *p++ = *s;
-  }
-
-  *p = '\0';
-  return (char *) memcpy (dst, buf, n + 1);
-}
-
 /* the following strncasecmp algorithm was borrowed from eglibc 2.15 {{{ */
 int
-xstrncasecmp (const char *s1, const char *s2, size_t n)
+tvi_strncasecmp (const char *s1, const char *s2, size_t n)
 {
   const unsigned char *p1 = (const unsigned char *) s1;
   const unsigned char *p2 = (const unsigned char *) s2;
@@ -260,7 +203,7 @@ two_way_short_needle (const unsigned char *haystack,
   size_t suffix;
 
   suffix = critical_factorization (needle, n_needle, &period);
-  if (xstrncasecmp (needle, needle + period, suffix) == 0)
+  if (tvi_strncasecmp (needle, needle + period, suffix) == 0)
   {
     size_t memory = 0;
     j = 0;
@@ -334,7 +277,7 @@ two_way_long_needle (const unsigned char *haystack,
   for (i = 0; i < n_needle; i++)
     shift_table[__tolower (needle[i])] = n_needle - i - 1;
 
-  if (xstrncasecmp (needle, needle + period, suffix) == 0)
+  if (tvi_strncasecmp (needle, needle + period, suffix) == 0)
   {
     size_t memory = 0;
     size_t shift;
@@ -407,7 +350,7 @@ two_way_long_needle (const unsigned char *haystack,
 }
 
 char *
-xstrcasestr (const char *haystack_start, const char *needle_start)
+tvi_strcasestr (const char *haystack_start, const char *needle_start)
 {
   const char *haystack = haystack_start;
   const char *needle = needle_start;
@@ -451,47 +394,47 @@ xstrcasestr (const char *haystack_start, const char *needle_start)
 /* }}} strcasestr algorithm */
 
 void *
-xmalloc (size_t n)
+tvi_malloc (size_t n)
 {
   void *p;
 
   p = malloc (n);
   if (!p)
   {
-    xerror (errno, "malloc failed");
+    tvi_error (errno, "malloc failed");
     exit (E_SYSTEM);
   }
   return p;
 }
 
 void *
-xrealloc (void *o, size_t n)
+tvi_realloc (void *o, size_t n)
 {
   void *p;
 
   p = realloc (o, n);
   if (!p)
   {
-    xerror (errno, "realloc failed");
+    tvi_error (errno, "realloc failed");
     exit (E_SYSTEM);
   }
   return p;
 }
 
 char *
-xstrdup (const char *s, ssize_t n)
+tvi_strdup (const char *s, ssize_t n)
 {
   size_t len;
   char *p;
 
   len = (n < 0) ? strlen (s) + 1 : strnlen (s, n) + 1;
-  p = xnewa (char, len);
+  p = tvi_newa (char, len);
   p[len - 1] = '\0';
   return (char *) memcpy (p, s, len - 1);
 }
 
 void
-replace_c (char *s, char c1, char c2)
+tvi_replace_c (char *s, char c1, char c2)
 {
   char *p;
 
@@ -501,7 +444,7 @@ replace_c (char *s, char c1, char c2)
 }
 
 void
-strip_trailing_space (char *s)
+tvi_strip_trailing_space (char *s)
 {
   size_t n;
 
@@ -511,18 +454,18 @@ strip_trailing_space (char *s)
 }
 
 void
-xgettimeofday (struct timeval *t)
+tvi_gettimeofday (struct timeval *t)
 {
   memset (t, 0, sizeof (struct timeval));
   if (gettimeofday (t, NULL) == -1)
   {
-    xerror (errno, "gettimeofday failed");
+    tvi_error (errno, "gettimeofday failed");
     exit (E_SYSTEM);
   }
 }
 
 int
-console_width (void)
+tvi_console_width (void)
 {
   struct winsize w;
 

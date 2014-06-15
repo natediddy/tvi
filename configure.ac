@@ -1,6 +1,6 @@
 AC_INIT(
   [tvi],
-  [3.4.2],
+  [3.4.4],
   [sforbes41@gmail.com],
   [tvi],
   [https://github.com/natediddy/tvi],
@@ -28,7 +28,7 @@ AS_HELP_STRING([--disable-debug], [Disable debugging (DEFAULT)])]
 
 AS_IF(
   [test x$enable_debug = xyes],
-  [AC_DEFINE([DEBUG], [1], [Define if debugging is enabled])],
+  [AC_DEFINE([TVI_DEBUG], [1], [Define if debugging is enabled])],
   []
 )
 

@@ -3,7 +3,7 @@ dist_man_MANS = tvi.1
 
 tvi_SOURCES = \
 	tvi.c \
-	tvi-util.c
+	tvi-utils.c
 
 EXTRA_DIST = \
 	README.md
