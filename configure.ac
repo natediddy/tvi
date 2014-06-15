@@ -1,6 +1,6 @@
 AC_INIT(
   [tvi],
-  [3.4.4],
+  [3.4.5],
   [sforbes41@gmail.com],
   [tvi],
   [https://github.com/natediddy/tvi],

@@ -59,7 +59,10 @@
 
 #define VERSION_TEXT \
   PROGRAM_NAME " " PROGRAM_VERSION "\n" \
-  "Written by Nathan Forbes (2014)\n"
+  "Copyright (C) 2014 Nathan Forbes <" PACKAGE_BUGREPORT ">\n" \
+  "This is free software; see the source for copying conditions.\n" \
+  "There is NO warranty; not even for MERCHANTABILITY or FITNESS FOR A\n" \
+  "PARTICULAR PURPOSE.\n"
 
 #define SEARCH_URL   TVDOTCOM "/search?q=%s/"
 #define EPISODES_URL TVDOTCOM "/shows/%s/episodes/"
