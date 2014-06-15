@@ -6,7 +6,7 @@ All TV series data is obtained from [TV.com](http://www.tv.com/).
 
 Usage
 -----
-    Usage: tvi [-adHilLnr] [-c[NAME]] [-sN[,N,...]] [-eN[,N,...]] TITLE
+    Usage: tvi [-adHilLnNr] [-c[NAME]] [-sN[,N,...]] [-eN[,N,...]] TITLE
 
 Options
 -------
